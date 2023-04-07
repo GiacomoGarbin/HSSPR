@@ -55,8 +55,6 @@ bool AppBase::Init()
 		mMesh = GeometryGenerator::CreateBox(1, 1, 1);
 	}
 
-	HRESULT result = S_OK;
-
 	// vertex buffer
 	{
 		D3D11_BUFFER_DESC desc;
@@ -72,8 +70,29 @@ bool AppBase::Init()
 		data.SysMemPitch = 0;
 		data.SysMemSlicePitch = 0;
 
-		result = mDevice->CreateBuffer(&desc, &data, mVertexBuffer.GetAddressOf());
-		assert(SUCCEEDED(result));
+		ThrowIfFailed(mDevice->CreateBuffer(&desc, &data, &mVertexBuffer));
+
+		NameResource(mVertexBuffer.Get(), "AppBase_VertexBuffer");
+
+#if 0
+		{
+			desc.Usage = D3D11_USAGE_STAGING;
+			desc.BindFlags = 0;
+			desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+			ComPtr<ID3D11Buffer> pStagingBuffer;
+			ThrowIfFailed(mDevice->CreateBuffer(&desc, &data, &pStagingBuffer));
+
+			mContext->CopyResource(pStagingBuffer.Get(), mVertexBuffer.Get());
+
+			D3D11_MAPPED_SUBRESOURCE mapped;
+			mContext->Map(pStagingBuffer.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+
+			OutputDebugStringA("");
+
+			mContext->Unmap(pStagingBuffer.Get(), 0);
+		}
+#endif
 	}
 
 	// index buffer
@@ -91,9 +110,34 @@ bool AppBase::Init()
 		data.SysMemPitch = 0;
 		data.SysMemSlicePitch = 0;
 
-		result = mDevice->CreateBuffer(&desc, &data, mIndexBuffer.GetAddressOf());
-		assert(SUCCEEDED(result));
+		ThrowIfFailed(mDevice->CreateBuffer(&desc, &data, &mIndexBuffer));
+		
+		NameResource(mIndexBuffer.Get(), "AppBase_IndexBuffer");
+
+#if 0
+		{
+			desc.Usage = D3D11_USAGE_STAGING;
+			desc.BindFlags = 0;
+			desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+			ComPtr<ID3D11Buffer> pStagingBuffer;
+			ThrowIfFailed(mDevice->CreateBuffer(&desc, &data, &pStagingBuffer));
+
+			mContext->CopyResource(pStagingBuffer.Get(), mIndexBuffer.Get());
+
+			D3D11_MAPPED_SUBRESOURCE mapped;
+			mContext->Map(pStagingBuffer.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+
+			OutputDebugStringA("");
+
+			mContext->Unmap(pStagingBuffer.Get(), 0);
+		}
+#endif
 	}
+
+	mIndexStart = 0;
+	mIndexCount = UINT(mMesh.indices.size());
+	mVertexBase = 0;
 
 	// default vertex shader
 	{
@@ -101,11 +145,12 @@ bool AppBase::Init()
 
 		ComPtr<ID3DBlob> pCode = CompileShader(path, nullptr, "DefaultVS", ShaderTarget::VS);
 
-		result = mDevice->CreateVertexShader(pCode->GetBufferPointer(),
-											 pCode->GetBufferSize(),
-											 nullptr,
-											 mVertexShader.GetAddressOf());
-		assert(SUCCEEDED(result));
+		ThrowIfFailed(mDevice->CreateVertexShader(pCode->GetBufferPointer(),
+												  pCode->GetBufferSize(),
+												  nullptr,
+												  &mVertexShader));
+
+		NameResource(mVertexShader.Get(), "DefaultVS");
 
 		// input layout
 		{
@@ -116,13 +161,14 @@ bool AppBase::Init()
 				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
 				{"TANGENT",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
 			};
-			
-			result = mDevice->CreateInputLayout(desc.data(),
-												UINT(desc.size()),
-												pCode->GetBufferPointer(),
-												pCode->GetBufferSize(),
-												mInputLayout.GetAddressOf());
-			assert(SUCCEEDED(result));
+
+			ThrowIfFailed(mDevice->CreateInputLayout(desc.data(),
+													 UINT(desc.size()),
+													 pCode->GetBufferPointer(),
+													 pCode->GetBufferSize(),
+													 &mInputLayout));
+
+			NameResource(mInputLayout.Get(), "DefaultVS_InputLayout");
 		}
 	}
 
@@ -132,11 +178,12 @@ bool AppBase::Init()
 
 		ComPtr<ID3DBlob> pCode = CompileShader(path, nullptr, "DefaultPS", ShaderTarget::PS);
 
-		result = mDevice->CreatePixelShader(pCode->GetBufferPointer(),
-											pCode->GetBufferSize(),
-											nullptr,
-											mPixelShader.GetAddressOf());
-		assert(SUCCEEDED(result));
+		ThrowIfFailed(mDevice->CreatePixelShader(pCode->GetBufferPointer(),
+												 pCode->GetBufferSize(),
+												 nullptr,
+												 &mPixelShader));
+
+		NameResource(mPixelShader.Get(), "DefaultPS");
 	}
 
 	// main pass CB
@@ -149,8 +196,9 @@ bool AppBase::Init()
 		desc.MiscFlags = 0;
 		desc.StructureByteStride = 0;
 
-		result = mDevice->CreateBuffer(&desc, nullptr, mMainPassCB.GetAddressOf());
-		assert(SUCCEEDED(result));
+		ThrowIfFailed(mDevice->CreateBuffer(&desc, nullptr, &mMainPassCB));
+
+		NameResource(mMainPassCB.Get(), "MainPassCB");
 	}
 
 	// object CB
@@ -163,8 +211,43 @@ bool AppBase::Init()
 		desc.MiscFlags = 0;
 		desc.StructureByteStride = 0;
 
-		result = mDevice->CreateBuffer(&desc, nullptr, mObjectCB.GetAddressOf());
-		assert(SUCCEEDED(result));
+		ThrowIfFailed(mDevice->CreateBuffer(&desc, nullptr, &mObjectCB));
+
+		NameResource(mObjectCB.Get(), "ObjectCB");
+	}
+
+	// materials
+	{
+		Material material;
+		material.diffuse = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+		material.fresnel = XMFLOAT3(0.6f, 0.6f, 0.6f);
+		material.roughness = 0.2f;
+
+		mMaterialManager.AddMaterial("default", material);
+	}
+
+	// materials structured buffer
+	{
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = sizeof(Material) * UINT(mMaterialManager.GetMaterials().size());
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		desc.StructureByteStride = sizeof(Material);
+
+		D3D11_SUBRESOURCE_DATA data;
+		data.pSysMem = mMaterialManager.GetMaterials().data();
+		data.SysMemPitch = 0;
+		data.SysMemSlicePitch = 0;
+
+		ThrowIfFailed(mDevice->CreateBuffer(&desc, &data, &mMaterialsSB));
+
+		NameResource(mMaterialsSB.Get(), "MaterialsSB");
+
+		ThrowIfFailed(mDevice->CreateShaderResourceView(mMaterialsSB.Get(), nullptr, &mMaterialsBufferSRV));
+
+		NameResource(mMaterialsBufferSRV.Get(), "MaterialsBufferSRV");
 	}
 
 	return true;
@@ -180,7 +263,7 @@ bool AppBase::InitWindow()
 	wc.hInstance = mInstance;
 	wc.hIcon = LoadIcon(0, IDI_APPLICATION);
 	wc.hCursor = LoadCursor(0, IDC_ARROW);
-	wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+	wc.hbrBackground = HBRUSH(GetStockObject(NULL_BRUSH));
 	wc.lpszMenuName = 0;
 	wc.lpszClassName = L"MainWnd";
 
@@ -395,9 +478,9 @@ bool AppBase::InitDirect3D()
 // 	}
 // }
 
-void AppBase::NameResource(ID3D11Resource* pResource, const std::string& name)
+void AppBase::NameResource(ID3D11DeviceChild* pDeviceChild, const std::string& name)
 {
-	ThrowIfFailed(pResource->SetPrivateData(WKPDID_D3DDebugObjectName, UINT(name.length()), name.data()));
+	ThrowIfFailed(pDeviceChild->SetPrivateData(WKPDID_D3DDebugObjectName, UINT(name.length()), name.data()));
 }
 
 void AppBase::OnResize()
@@ -436,6 +519,8 @@ void AppBase::OnResize()
 		NameResource(pBackBuffer.Get(), "BackBuffer");
 
 		ThrowIfFailed(mDevice->CreateRenderTargetView(pBackBuffer.Get(), nullptr, &mBackBufferRTV));
+
+		NameResource(mBackBufferRTV.Get(), "BackBufferRTV");
 	}
 
 	// depth stencil buffer
@@ -472,6 +557,8 @@ void AppBase::OnResize()
 			ThrowIfFailed(mDevice->CreateDepthStencilView(pDepthStencilBuffer.Get(),
 														  &desc,
 														  &mDepthStencilBufferDSV));
+
+			NameResource(mDepthStencilBufferDSV.Get(), "DepthStencilBufferDSV");
 		}
 	}
 
@@ -699,8 +786,6 @@ void AppBase::OnKeyboardEvent(const Timer& timer)
 	{
 		mCamera.Strafe(+10.0f * dt);
 	}
-
-	mCamera.UpdateViewMatrix();
 }
 
 int AppBase::Run()
@@ -785,9 +870,47 @@ int AppBase::Run()
 // 	}
 // }
 
+void AppBase::UpdateMainPassCB(const Timer& timer)
+{
+	MainPassCB buffer;
+
+	XMMATRIX V = mCamera.GetView();
+	XMMATRIX P = mCamera.GetProj();
+	XMMATRIX viewProj = V * P;
+	XMStoreFloat4x4(&buffer.viewProj, viewProj);
+
+	buffer.eyePosition = mCamera.GetPositionF();
+
+	buffer.ambientLight = { 0.25f, 0.25f, 0.35f, 1.0f };
+
+	buffer.lights[0].direction = mLighting.GetLightDirection(0);
+	buffer.lights[0].strength = { 0.9f, 0.9f, 0.7f };
+	buffer.lights[1].direction = mLighting.GetLightDirection(1);
+	buffer.lights[1].strength = { 0.4f, 0.4f, 0.4f };;
+	buffer.lights[2].direction = mLighting.GetLightDirection(2);
+	buffer.lights[2].strength = { 0.2f, 0.2f, 0.2f };
+	
+	mContext->UpdateSubresource(mMainPassCB.Get(), 0, nullptr, &buffer, 0, 0);
+}
+
+void AppBase::UpdateMaterialsSB(const Timer& timer)
+{
+	if (mIsMaterialsBufferDirty)
+	{
+		mIsMaterialsBufferDirty = false;
+	}
+}
+
 void AppBase::Update(const Timer& timer)
 {
 	OnKeyboardEvent(timer);
+
+	mCamera.UpdateViewMatrix();
+
+	mLighting.UpdateLights(timer);
+
+	UpdateMainPassCB(timer);
+	UpdateMaterialsSB(timer);
 }
 
 ComPtr<ID3DBlob> AppBase::CompileShader(const std::wstring& fileName,

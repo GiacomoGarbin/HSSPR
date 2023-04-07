@@ -15,67 +15,76 @@
 struct Light
 {
     float3 strength;
-    float FalloffStart;
+    float falloffStart;
     float3 direction;
-    float FalloffEnd;
+    float falloffEnd;
     float3 position;
-    float SpotPower;
+    float spotPower;
 };
 
 struct Material
 {
-    float4 DiffuseAlbedo;
-    float3 FresnelR0;
+    float4 diffuse;
+    float3 fresnel;
     float shininess;
 };
 
-float LightAttenuation(float x, float a, float b)
+float LightAttenuation(const float x, const float a, const float b)
 {
     return saturate((b - x) / (b - a));
 }
 
-float3 SchlickFresnel(float3 R0, float3 normal, float3 light)
+float3 SchlickFresnel(const float3 R0,
+                      const float3 normal,
+                      const float3 light)
 {
-    float angle = saturate(dot(normal, light));
+    const float angle = saturate(dot(normal, light));
 
-    float f0 = 1.0f - angle;
-    float3 r = R0 + (1.0f - R0) * (f0*f0*f0*f0*f0);
+    const float f0 = 1.0f - angle;
+    const float3 r = R0 + (1.0f - R0) * (f0*f0*f0*f0*f0);
 
     return r;
 }
 
-float3 BlinnPhong(float3 LightStrength, float3 LightVec, float3 normal, float3 ToEye, Material material)
+float3 BlinnPhong(const float3 strength,
+                  const float3 direction,
+                  const float3 normal,
+                  const float3 toEye,
+                  const Material material)
 {
     const float m = material.shininess * 256.0f;
-    float3 HalfVec = normalize(ToEye + LightVec);
+    const float3 halfVec = normalize(toEye + direction);
 
-    float roughness = (m + 8.0f) * pow(max(dot(HalfVec, normal), 0.0f), m) / 8.0f;
-    float3 fresnel = SchlickFresnel(material.FresnelR0, HalfVec, LightVec);
+    const float roughness = (m + 8.0f) * pow(max(dot(halfVec, normal), 0.0f), m) / 8.0f;
+    const float3 fresnel = SchlickFresnel(material.fresnel, halfVec, direction);
 
     float3 albedo = fresnel * roughness;
     albedo = albedo / (albedo + 1.0f);
 
-    return (material.DiffuseAlbedo.rgb + albedo) * LightStrength;
+    return (material.diffuse.rgb + albedo) * strength;
 }
 
-float3 ComputeDirectionalLight(Light light, Material material, float3 normal, float3 ToEye)
+float3 ComputeDirectionalLight(const Light light,
+                               const Material material,
+                               const float3 normal,
+                               const float3 toEye)
 {
     // the light vector aims opposite the direction the light rays travel
-    float3 LightVec = -light.direction;
+    const float3 direction = -light.direction;
 
     // scale light down by Lambert's cosine law.
-    float ndotl = max(dot(LightVec, normal), 0.0f);
-    float3 LightStrength = light.strength * ndotl;
+    const float ndotl = max(dot(direction, normal), 0.0f);
+    const float3 strength = light.strength * ndotl;
 
-    return BlinnPhong(LightStrength, LightVec, normal, ToEye, material);
+    return BlinnPhong(strength, direction, normal, toEye, material);
 }
 
 float4 ComputeLighting(Light lights[LIGHT_MAX_COUNT],
                        Material material,
                        float3 position,
                        float3 normal,
-                       float3 ToEye,
-                       float3 ShadowFactor)
+                       float3 toEye,
+                       float3 shadow)
 {
     float3 result = 0.0f;
 
@@ -84,7 +93,7 @@ float4 ComputeLighting(Light lights[LIGHT_MAX_COUNT],
 #if (LIGHT_DIR_COUNT > 0)
     for(i = 0; i < LIGHT_DIR_COUNT; ++i)
     {
-        result += ShadowFactor[i] * ComputeDirectionalLight(lights[i], material, normal, ToEye);
+        result += shadow[i] * ComputeDirectionalLight(lights[i], material, normal, toEye);
     }
 #endif
 
@@ -95,7 +104,7 @@ float4 ComputeLighting(Light lights[LIGHT_MAX_COUNT],
 //     }
 // #endif
 
-// #if (LIGHT_POINT_COUNT > 0)
+// #if (LIGHT_SPOT_COUNT > 0)
 //     for(i = LIGHT_DIR_COUNT + LIGHT_POINT_COUNT; i < LIGHT_DIR_COUNT + LIGHT_POINT_COUNT + LIGHT_SPOT_COUNT; ++i)
 //     {
 //         result += ComputeSpotLight(gLights[i], mat, pos, normal, toEye);

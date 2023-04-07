@@ -27,20 +27,12 @@ void AppInst::Update(const Timer& timer)
 {
 	AppBase::Update(timer);
 
-	return;
-
-	// update main pass constant buffer
-	{
-		MainPassCB buffer;
-		ZeroMemory(&buffer, sizeof(MainPassCB));
-
-		mContext->UpdateSubresource(mMainPassCB.Get(), 0, nullptr, &buffer, 0, 0);
-	}
-
 	// update object constant buffer
 	{
 		ObjectCB buffer;
-		ZeroMemory(&buffer, sizeof(ObjectCB));
+
+		XMStoreFloat4x4(&buffer.world, XMMatrixIdentity());
+		buffer.material = 0;
 
 		mContext->UpdateSubresource(mObjectCB.Get(), 0, nullptr, &buffer, 0, 0);
 	}
@@ -66,7 +58,11 @@ void AppInst::Draw(const Timer& timer)
 	// set viewport
 	mContext->RSSetViewports(1, &mViewport);
 
-	return;
+	// set input layout
+	mContext->IASetInputLayout(mInputLayout.Get());
+
+	// set primitive topology
+	mContext->IASetPrimitiveTopology(mPrimitiveTopology);
 
 	// set vertex buffer
 	const UINT stride = sizeof(GeometryGenerator::VertexData);
@@ -75,12 +71,6 @@ void AppInst::Draw(const Timer& timer)
 	
 	// set index buffer
 	mContext->IASetIndexBuffer(mIndexBuffer.Get(), mIndexBufferFormat, 0);
-
-	// set input layout
-	mContext->IASetInputLayout(mInputLayout.Get());
-
-	// set primitive topology
-	mContext->IASetPrimitiveTopology(mPrimitiveTopology);
 
 	// set rasterizer state
 	// set depth stencil state
@@ -101,6 +91,7 @@ void AppInst::Draw(const Timer& timer)
 	mContext->PSSetShader(mPixelShader.Get(), nullptr, 0);
 
 	// set shader resource views
+	mContext->PSSetShaderResources(0, 1, mMaterialsBufferSRV.GetAddressOf());
 
 	// draw
 	mContext->DrawIndexed(mIndexCount, mIndexStart, mVertexBase);

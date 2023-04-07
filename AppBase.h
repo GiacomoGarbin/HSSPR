@@ -1,10 +1,5 @@
 #pragma once
 
-// #include "utils.h"
-
-// #include "MathHelper.h"
-// #include "DDSTextureLoader.h"
-
 // windows
 #include <wrl.h>
 #include <comdef.h>
@@ -12,14 +7,20 @@ using Microsoft::WRL::ComPtr;
 
 // d3d
 #include <d3d11.h>
+#include <directxmath.h>
+using namespace DirectX;
+
+// #include "DDSTextureLoader.h"
 
 // std
 #include <string>
 #include <sstream>
 
-//
+// 
 #include "Camera.h"
 #include "GeometryGenerator.h"
+#include "Lighting.h"
+#include "MaterialManager.h"
 #include "Timer.h"
 
 inline std::wstring AnsiToWString(const std::string& str)
@@ -41,6 +42,7 @@ inline std::wstring AnsiToWString(const std::string& str)
 class AppBase
 {
 public:
+
     AppBase(HINSTANCE instance);
     AppBase(const AppBase&) = delete;
     AppBase& operator=(const AppBase&) = delete;
@@ -90,12 +92,16 @@ public:
     };
 
 protected:
+
     virtual void OnMouseDown(WPARAM state, int x, int y);
     virtual void OnMouseUp(WPARAM state, int x, int y);
     virtual void OnMouseMove(WPARAM state, int x, int y);
     virtual void OnKeyboardEvent(const Timer& timer);
 
-    void NameResource(ID3D11Resource* pResource, const std::string& name);
+    virtual void UpdateMainPassCB(const Timer& timer);
+    virtual void UpdateMaterialsSB(const Timer& timer);
+
+    void NameResource(ID3D11DeviceChild* pDeviceChild, const std::string& name);
 
     enum class ShaderTarget
     {
@@ -125,15 +131,15 @@ protected:
     DXGI_FORMAT mIndexBufferFormat = DXGI_FORMAT_R16_UINT;
     ComPtr<ID3D11InputLayout> mInputLayout;
 
+    UINT mIndexStart;
+    UINT mIndexCount;
+    UINT mVertexBase;
+
     D3D11_PRIMITIVE_TOPOLOGY mPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
     // default shaders
     ComPtr<ID3D11VertexShader> mVertexShader;
     ComPtr<ID3D11PixelShader> mPixelShader;
-
-    UINT mIndexStart;
-    UINT mIndexCount;
-    UINT mVertexBase;
 
     struct MainPassCB
     {
@@ -144,8 +150,8 @@ protected:
         XMFLOAT4X4 viewProj;
 //        XMFLOAT4X4 ViewProjInverse = MathHelper::Identity4x4();
 //        XMFLOAT4X4 ShadowTransform = MathHelper::Identity4x4();
-//        XMFLOAT3 EyePositionWorld = { 0.0f, 0.0f, 0.0f };
-//        float padding1;
+        XMFLOAT3 eyePosition = { 0.0f, 0.0f, 0.0f };
+        float padding1;
 //        XMFLOAT2 RenderTargetSize = { 0.0f, 0.0f };
 //        XMFLOAT2 RenderTargetSizeInverse = { 0.0f, 0.0f };
 //        float NearPlane = 0.0f;
@@ -153,7 +159,7 @@ protected:
 //        float DeltaTime = 0.0f;
 //        float TotalTime = 0.0f;
 //
-//        XMFLOAT4 AmbientLight = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+        XMFLOAT4 ambientLight = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 //
 //#if IS_FOG_ENABLED
 //        XMFLOAT4 FogColor = { 0.7f, 0.7f, 0.7f, 1.0f };
@@ -162,7 +168,7 @@ protected:
 //        XMFLOAT2 padding2;
 //#endif // IS_FOG_ENABLED
 //
-//        Light lights[LIGHT_MAX_COUNT];
+        Lighting::Light lights[LIGHT_MAX_COUNT];
     };
 
     static_assert((sizeof(MainPassCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
@@ -171,8 +177,8 @@ protected:
     {
         XMFLOAT4X4 world;
         //XMFLOAT4X4 TexCoordTransform = MathHelper::Identity4x4();
-        //UINT MaterialIndex = -1;
-        //XMFLOAT3 padding;
+        UINT material = -1;
+        XMFLOAT3 padding;
     };
 
     static_assert((sizeof(ObjectCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
@@ -180,7 +186,10 @@ protected:
     ComPtr<ID3D11Buffer> mMainPassCB;
     ComPtr<ID3D11Buffer> mObjectCB;
 
+    ComPtr<ID3D11ShaderResourceView> mMaterialsBufferSRV;
+
 private:
+
     bool InitWindow();
     bool InitDirect3D();
 
@@ -222,19 +231,19 @@ private:
     ComPtr<ID3D11BlendState> mBlendState;
     ComPtr<ID3D11DepthStencilState> mDepthStencilState;
 
-    // samplers
-
-    //std::vector<GeometryGenerator::MeshData> mMeshes;
-    GeometryGenerator::MeshData mMesh;
-
+    // default samplers
     // textures
+
     // materials
+    MaterialManager mMaterialManager;
+    ComPtr<ID3D11Buffer> mMaterialsSB;
+    bool mIsMaterialsBufferDirty = true;
+
     // lights
+    Lighting mLighting;
 
     // objects
 
-    // materials structured buffer
-    
-    // frame constant buffer
-    // object constant buffer
+    //std::vector<GeometryGenerator::MeshData> mMeshes;
+    GeometryGenerator::MeshData mMesh;
 };

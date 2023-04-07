@@ -147,6 +147,7 @@
     <ClCompile Include="AppInst.cpp" />
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="GeometryGenerator.cpp" />
+    <ClCompile Include="MaterialManager.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="WinMain.cpp" />
   </ItemGroup>
@@ -155,6 +156,8 @@
     <ClInclude Include="AppInst.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="GeometryGenerator.h" />
+    <ClInclude Include="Lighting.h" />
+    <ClInclude Include="MaterialManager.h" />
     <ClInclude Include="Timer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
