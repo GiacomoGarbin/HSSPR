@@ -27,7 +27,7 @@
     <ClCompile Include="..\RenderToyD3D11\Camera.cpp">
       <Filter>RenderToyD3D11</Filter>
     </ClCompile>
-    <ClCompile Include="..\RenderToyD3D11\GeometryGenerator.cpp">
+    <ClCompile Include="..\RenderToyD3D11\MeshManager.cpp">
       <Filter>RenderToyD3D11</Filter>
     </ClCompile>
     <ClCompile Include="..\RenderToyD3D11\MaterialManager.cpp">
@@ -45,8 +45,8 @@
     <ClCompile Include="..\RenderToyD3D11\Utility.cpp">
       <Filter>RenderToyD3D11</Filter>
     </ClCompile>
-    <ClCompile Include="..\RenderToyD3D11\MeshManager.cpp">
-      <Filter>RenderToyD3D11</Filter>
+    <ClCompile Include="BVH.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -59,7 +59,7 @@
     <ClInclude Include="..\RenderToyD3D11\Camera.h">
       <Filter>RenderToyD3D11</Filter>
     </ClInclude>
-    <ClInclude Include="..\RenderToyD3D11\GeometryGenerator.h">
+    <ClInclude Include="..\RenderToyD3D11\MeshManager.h">
       <Filter>RenderToyD3D11</Filter>
     </ClInclude>
     <ClInclude Include="..\RenderToyD3D11\Lighting.h">
@@ -77,8 +77,8 @@
     <ClInclude Include="..\RenderToyD3D11\Utility.h">
       <Filter>RenderToyD3D11</Filter>
     </ClInclude>
-    <ClInclude Include="..\RenderToyD3D11\MeshManager.h">
-      <Filter>RenderToyD3D11</Filter>
+    <ClInclude Include="BVH.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

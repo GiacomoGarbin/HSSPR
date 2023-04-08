@@ -3,6 +3,9 @@
 // d3d
 #include <directxcolors.h>
 
+//
+#include "BVH.h"
+
 AppInst::AppInst(HINSTANCE instance)
 	: AppBase(instance)
 {}
@@ -20,9 +23,6 @@ bool AppInst::Init()
 
 	// build objects
 
-
-
-	// build BVH
 
 	return true;
 }
@@ -61,12 +61,12 @@ void AppInst::Draw(const Timer& timer)
 	mContext->IASetPrimitiveTopology(mPrimitiveTopology);
 
 	// set vertex buffer
-	const UINT stride = sizeof(GeometryGenerator::VertexData);
+	const UINT stride = sizeof(VertexData);
 	const UINT offset = 0;
-	mContext->IASetVertexBuffers(0, 1, mVertexBuffer.GetAddressOf(), &stride, &offset);
+	mContext->IASetVertexBuffers(0, 1, mMeshManager.GetAddressOfVertexBuffer(), &stride, &offset);
 	
 	// set index buffer
-	mContext->IASetIndexBuffer(mIndexBuffer.Get(), mIndexBufferFormat, 0);
+	mContext->IASetIndexBuffer(mMeshManager.GetIndexBuffer(), mMeshManager.GetIndexBufferFormat(), 0);
 
 	// set rasterizer state
 	// set depth stencil state
@@ -93,7 +93,9 @@ void AppInst::Draw(const Timer& timer)
 	{
 		mObjectManager.UpdateBuffer(i);
 
+		const MeshData& mesh = mMeshManager.GetMesh(mObjectManager.GetObject(i).mesh);
+
 		// draw
-		mContext->DrawIndexed(mIndexCount, mIndexStart, mVertexBase);
+		mContext->DrawIndexed(mesh.indexCount, mesh.indexStart, mesh.vertexBase);
 	}
 }
