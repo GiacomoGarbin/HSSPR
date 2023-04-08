@@ -15,7 +15,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev, PSTR CMD, int ShowCMD)
 
         return app.Run();
     }
-    catch (AppBase::Exception& exception)
+    catch (Exception& exception)
     {
         MessageBox(nullptr, exception.ToString().c_str(), L"HR Failed", MB_OK);
         return 0;

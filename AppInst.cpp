@@ -20,6 +20,10 @@ bool AppInst::Init()
 
 	// build objects
 
+
+
+	// build BVH
+
 	return true;
 }
 
@@ -27,15 +31,7 @@ void AppInst::Update(const Timer& timer)
 {
 	AppBase::Update(timer);
 
-	// update object constant buffer
-	{
-		ObjectCB buffer;
-
-		XMStoreFloat4x4(&buffer.world, XMMatrixIdentity());
-		buffer.material = 0;
-
-		mContext->UpdateSubresource(mObjectCB.Get(), 0, nullptr, &buffer, 0, 0);
-	}
+	//mObjectManager.UpdateBuffer(0);
 }
 
 void AppInst::Draw(const Timer& timer)
@@ -81,8 +77,8 @@ void AppInst::Draw(const Timer& timer)
 	mContext->PSSetConstantBuffers(0, 1, mMainPassCB.GetAddressOf());
 
 	// set object constant buffer
-	mContext->VSSetConstantBuffers(1, 1, mObjectCB.GetAddressOf());
-	mContext->PSSetConstantBuffers(1, 1, mObjectCB.GetAddressOf());
+	mContext->VSSetConstantBuffers(1, 1, mObjectManager.GetAddressOfBuffer());
+	mContext->PSSetConstantBuffers(1, 1, mObjectManager.GetAddressOfBuffer());
 
 	// set vertex shader
 	mContext->VSSetShader(mVertexShader.Get(), nullptr, 0);
@@ -91,8 +87,13 @@ void AppInst::Draw(const Timer& timer)
 	mContext->PSSetShader(mPixelShader.Get(), nullptr, 0);
 
 	// set shader resource views
-	mContext->PSSetShaderResources(0, 1, mMaterialsBufferSRV.GetAddressOf());
+	mContext->PSSetShaderResources(0, 1, mMaterialManager.GetAddressOfBufferSRV());
 
-	// draw
-	mContext->DrawIndexed(mIndexCount, mIndexStart, mVertexBase);
+	for (std::size_t i = 0; i < mObjectManager.GetObjects().size(); ++i)
+	{
+		mObjectManager.UpdateBuffer(i);
+
+		// draw
+		mContext->DrawIndexed(mIndexCount, mIndexStart, mVertexBase);
+	}
 }

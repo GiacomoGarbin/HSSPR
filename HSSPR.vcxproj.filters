@@ -13,51 +13,72 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="RenderToyD3D11">
+      <UniqueIdentifier>{f0afa18d-d7bd-4c72-a086-0d2cde62eb0b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="WinMain.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="AppBase.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Timer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="AppInst.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Camera.cpp">
+    <ClCompile Include="..\RenderToyD3D11\AppBase.cpp">
+      <Filter>RenderToyD3D11</Filter>
+    </ClCompile>
+    <ClCompile Include="..\RenderToyD3D11\Camera.cpp">
+      <Filter>RenderToyD3D11</Filter>
+    </ClCompile>
+    <ClCompile Include="..\RenderToyD3D11\GeometryGenerator.cpp">
+      <Filter>RenderToyD3D11</Filter>
+    </ClCompile>
+    <ClCompile Include="..\RenderToyD3D11\MaterialManager.cpp">
+      <Filter>RenderToyD3D11</Filter>
+    </ClCompile>
+    <ClCompile Include="..\RenderToyD3D11\Timer.cpp">
+      <Filter>RenderToyD3D11</Filter>
+    </ClCompile>
+    <ClCompile Include="WinMain.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GeometryGenerator.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="..\RenderToyD3D11\ObjectManager.cpp">
+      <Filter>RenderToyD3D11</Filter>
     </ClCompile>
-    <ClCompile Include="MaterialManager.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="..\RenderToyD3D11\Utility.cpp">
+      <Filter>RenderToyD3D11</Filter>
+    </ClCompile>
+    <ClCompile Include="..\RenderToyD3D11\MeshManager.cpp">
+      <Filter>RenderToyD3D11</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="AppBase.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Timer.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="AppInst.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="Camera.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="..\RenderToyD3D11\AppBase.h">
+      <Filter>RenderToyD3D11</Filter>
     </ClInclude>
-    <ClInclude Include="GeometryGenerator.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="..\RenderToyD3D11\Camera.h">
+      <Filter>RenderToyD3D11</Filter>
     </ClInclude>
-    <ClInclude Include="Lighting.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="..\RenderToyD3D11\GeometryGenerator.h">
+      <Filter>RenderToyD3D11</Filter>
     </ClInclude>
-    <ClInclude Include="MaterialManager.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="..\RenderToyD3D11\Lighting.h">
+      <Filter>RenderToyD3D11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\RenderToyD3D11\MaterialManager.h">
+      <Filter>RenderToyD3D11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\RenderToyD3D11\Timer.h">
+      <Filter>RenderToyD3D11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\RenderToyD3D11\ObjectManager.h">
+      <Filter>RenderToyD3D11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\RenderToyD3D11\Utility.h">
+      <Filter>RenderToyD3D11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\RenderToyD3D11\MeshManager.h">
+      <Filter>RenderToyD3D11</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
