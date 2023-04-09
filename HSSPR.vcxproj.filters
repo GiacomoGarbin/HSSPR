@@ -48,6 +48,9 @@
     <ClCompile Include="BVH.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="RayTracedShadows.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AppInst.h">
@@ -79,6 +82,18 @@
     </ClInclude>
     <ClInclude Include="BVH.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RayTracedShadows.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\RenderToyD3D11\ShaderManager.h">
+      <Filter>RenderToyD3D11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\RenderToyD3D11\StateManager.h">
+      <Filter>RenderToyD3D11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\RenderToyD3D11\TextureManager.h">
+      <Filter>RenderToyD3D11</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

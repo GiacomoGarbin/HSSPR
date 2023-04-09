@@ -3,9 +3,6 @@
 // d3d
 #include <directxcolors.h>
 
-//
-#include "BVH.h"
-
 AppInst::AppInst(HINSTANCE instance)
 	: AppBase(instance)
 {}
@@ -23,6 +20,9 @@ bool AppInst::Init()
 
 	// build objects
 
+	mBVH.Init(mDevice, mContext);
+	mBVH.BuildBVH(mObjectManager.GetObjects(), mMeshManager);
+
 
 	return true;
 }
@@ -31,7 +31,7 @@ void AppInst::Update(const Timer& timer)
 {
 	AppBase::Update(timer);
 
-	//mObjectManager.UpdateBuffer(0);
+	mRayTracedShadows.UpdateCB(mLighting.GetLightDirection(0));
 }
 
 void AppInst::Draw(const Timer& timer)
@@ -81,10 +81,10 @@ void AppInst::Draw(const Timer& timer)
 	mContext->PSSetConstantBuffers(1, 1, mObjectManager.GetAddressOfBuffer());
 
 	// set vertex shader
-	mContext->VSSetShader(mVertexShader.Get(), nullptr, 0);
+	mContext->VSSetShader(mDefaultVS.Get(), nullptr, 0);
 
 	// set pixel shader
-	mContext->PSSetShader(mPixelShader.Get(), nullptr, 0);
+	mContext->PSSetShader(mDefaultPS.Get(), nullptr, 0);
 
 	// set shader resource views
 	mContext->PSSetShaderResources(0, 1, mMaterialManager.GetAddressOfBufferSRV());
@@ -97,5 +97,23 @@ void AppInst::Draw(const Timer& timer)
 
 		// draw
 		mContext->DrawIndexed(mesh.indexCount, mesh.indexStart, mesh.vertexBase);
+	}
+
+	// ray traced shadows
+	{
+		// set vertex shader
+		mContext->VSSetShader(mFullscreenVS.Get(), nullptr, 0);
+
+		// set pixel shader
+		mContext->PSSetShader(mRayTracedShadows.GetPixelShader(), nullptr, 0);
+
+		// set constant buffer
+		mContext->PSSetConstantBuffers(0, 1, mRayTracedShadows.GetAddressOfConstantBuffer());
+
+		// set structured buffer SRV
+		mContext->PSSetShaderResources(0, 1, mBVH.GetAddressOfBufferSRV());
+
+		// draw
+		mContext->Draw(3, 0);
 	}
 }

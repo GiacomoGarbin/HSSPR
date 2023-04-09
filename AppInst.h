@@ -2,9 +2,14 @@
 
 #include "AppBase.h"
 
+//
+#include "BVH.h"
+#include "RayTracedShadows.h"
+
 class AppInst : public AppBase
 {
 public:
+
     AppInst(HINSTANCE instance);
     ~AppInst();
 
@@ -15,4 +20,6 @@ public:
 
 private:
 
+    BVH mBVH;
+    RayTracedShadows mRayTracedShadows;
 };
