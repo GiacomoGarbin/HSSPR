@@ -23,6 +23,7 @@ bool AppInst::Init()
 	mBVH.Init(mDevice, mContext);
 	mBVH.BuildBVH(mObjectManager.GetObjects(), mMeshManager);
 
+	mRayTracedShadows.Init(mDevice, mContext);
 
 	return true;
 }
@@ -31,7 +32,8 @@ void AppInst::Update(const Timer& timer)
 {
 	AppBase::Update(timer);
 
-	mRayTracedShadows.UpdateCB(mLighting.GetLightDirection(0));
+	mRayTracedShadows.UpdateCB(mCamera.GetViewProjInvF(),
+							   mLighting.GetLightDirection(0));
 }
 
 void AppInst::Draw(const Timer& timer)
@@ -101,6 +103,14 @@ void AppInst::Draw(const Timer& timer)
 
 	// ray traced shadows
 	{
+		// set back buffer and depth stencil buffer
+		mContext->OMSetRenderTargets(1,
+									 mBackBufferRTV.GetAddressOf(),
+									 nullptr);
+
+		// set input layout
+		mContext->IASetInputLayout(nullptr);
+
 		// set vertex shader
 		mContext->VSSetShader(mFullscreenVS.Get(), nullptr, 0);
 
@@ -110,10 +120,26 @@ void AppInst::Draw(const Timer& timer)
 		// set constant buffer
 		mContext->PSSetConstantBuffers(0, 1, mRayTracedShadows.GetAddressOfConstantBuffer());
 
-		// set structured buffer SRV
-		mContext->PSSetShaderResources(0, 1, mBVH.GetAddressOfBufferSRV());
+		// set shader resource views
+		ID3D11ShaderResourceView* SRVs[] =
+		{
+			mDepthBufferSRV.Get(),
+			mBVH.GetBufferSRV()
+		};
+
+		mContext->PSSetShaderResources(0, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
+
+		// set blend state
+		mContext->OMSetBlendState(mRayTracedShadows.GetBlendState(), nullptr, 0xffffffff);
 
 		// draw
 		mContext->Draw(3, 0);
+
+		// set shader resource views
+		ID3D11ShaderResourceView* pNullSRV = nullptr;
+		mContext->PSSetShaderResources(0, 1, &pNullSRV);
+
+
+		mContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 	}
 }

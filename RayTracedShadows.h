@@ -10,9 +10,13 @@ using Microsoft::WRL::ComPtr;
 
 // d3d
 #include <d3d11.h>
+#include <directxmath.h>
+using namespace DirectX;
 
 // 
 #include "Utility.h"
+
+#define STRUCTURED 1
 
 class RayTracedShadows
 {
@@ -28,8 +32,14 @@ public:
 		{
 			std::wstring path = L"shaders/RayTracedShadows.hlsl";
 
+			const D3D_SHADER_MACRO defines[] =
+			{
+				"STRUCTURED", STRUCTURED ? "1" : "0",
+				nullptr, nullptr
+			};
+
 			ComPtr<ID3DBlob> pCode = CompileShader(path,
-												   nullptr,
+												   defines,
 												   "RayTracedShadowsPS",
 												   ShaderTarget::PS);
 
@@ -55,11 +65,31 @@ public:
 
 			NameResource(mConstantBuffer.Get(), "RayTracedShadowsCB");
 		}
+
+		// blend state
+		{
+			D3D11_BLEND_DESC desc;
+			desc.AlphaToCoverageEnable = false;
+			desc.IndependentBlendEnable = false;
+			desc.RenderTarget[0].BlendEnable = true;
+			desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+			desc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+			desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+			desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
+			desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+			desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+			desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+			ThrowIfFailed(mDevice->CreateBlendState(&desc, &mBlendState));
+
+			NameResource(mBlendState.Get(), "RayTracedShadowsBS");
+		}
 	}
 
-	void UpdateCB(const XMFLOAT3& lightDir)
+	void UpdateCB(const XMFLOAT4X4& viewProjInv, const XMFLOAT3& lightDir)
 	{
 		ConstantBuffer buffer;
+		buffer.viewProjInv = viewProjInv;
 		buffer.lightDir = lightDir;
 
 		mContext->UpdateSubresource(mConstantBuffer.Get(), 0, nullptr, &buffer, 0, 0);
@@ -75,6 +105,11 @@ public:
 		return mConstantBuffer.GetAddressOf();
 	}
 
+	ID3D11BlendState* GetBlendState()
+	{
+		return mBlendState.Get();
+	}
+
 private:
 
 	ComPtr<ID3D11Device> mDevice;
@@ -85,10 +120,13 @@ private:
 
 	struct ConstantBuffer
 	{
-		XMFLOAT3 lightDir;
-		float padding;
+		XMFLOAT4X4 viewProjInv;
+		XMFLOAT3   lightDir;
+		float      padding;
 	};
 
 	static_assert((sizeof(ConstantBuffer) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+	ComPtr<ID3D11BlendState> mBlendState;
 };
 
