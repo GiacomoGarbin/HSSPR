@@ -148,7 +148,7 @@ public:
 
 		TreeNode* root = CreateTreeNode(triangles, 0, int(triangles.size() - 1));
 
-		PrintTreeNode(root);
+		//PrintTreeNode(root);
 
 		const int kMaxNodeCount = 1000000;
 		uint8_t* data = new uint8_t[kMaxNodeCount * sizeof(Leaf)];

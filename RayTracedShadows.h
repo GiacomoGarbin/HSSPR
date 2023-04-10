@@ -51,19 +51,34 @@ public:
 			NameResource(mPixelShader.Get(), "RayTracedShadowsPS");
 		}
 
-		// constant buffer
+		// common constant buffer
 		{
 			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(ConstantBuffer);
+			desc.ByteWidth = sizeof(CommonCB);
 			desc.Usage = D3D11_USAGE_DEFAULT;
 			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 			desc.CPUAccessFlags = 0;
 			desc.MiscFlags = 0;
 			desc.StructureByteStride = 0;
 
-			ThrowIfFailed(mDevice->CreateBuffer(&desc, nullptr, &mConstantBuffer));
+			ThrowIfFailed(mDevice->CreateBuffer(&desc, nullptr, &mCommonCB));
 
-			NameResource(mConstantBuffer.Get(), "RayTracedShadowsCB");
+			NameResource(mCommonCB.Get(), "RayTracedCommonCB");
+		}
+
+		// shadows constant buffer
+		{
+			D3D11_BUFFER_DESC desc;
+			desc.ByteWidth = sizeof(ShadowsCB);
+			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+			desc.StructureByteStride = 0;
+
+			ThrowIfFailed(mDevice->CreateBuffer(&desc, nullptr, &mShadowsCB));
+
+			NameResource(mShadowsCB.Get(), "RayTracedShadowsCB");
 		}
 
 		// blend state
@@ -86,13 +101,18 @@ public:
 		}
 	}
 
-	void UpdateCB(const XMFLOAT4X4& viewProjInv, const XMFLOAT3& lightDir)
+	void UpdateCBs(const XMFLOAT4X4& viewProjInv, const XMFLOAT3& lightDir)
 	{
-		ConstantBuffer buffer;
-		buffer.viewProjInv = viewProjInv;
-		buffer.lightDir = lightDir;
+		CommonCB common;
+		common.viewProjInv = viewProjInv;
 
-		mContext->UpdateSubresource(mConstantBuffer.Get(), 0, nullptr, &buffer, 0, 0);
+		mContext->UpdateSubresource(mCommonCB.Get(), 0, nullptr, &common, 0, 0);
+
+		ShadowsCB shadows;
+		shadows.lightDir = XMFLOAT3(-lightDir.x, -lightDir.y, -lightDir.z);
+		shadows.lightDirInv = XMFLOAT3(-1 / lightDir.x, -1 / lightDir.y, -1 / lightDir.z);
+
+		mContext->UpdateSubresource(mShadowsCB.Get(), 0, nullptr, &shadows, 0, 0);
 	}
 
 	ID3D11PixelShader* GetPixelShader()
@@ -100,9 +120,14 @@ public:
 		return mPixelShader.Get();
 	}
 
-	ID3D11Buffer** GetAddressOfConstantBuffer()
+	ID3D11Buffer* GetCommonCB()
 	{
-		return mConstantBuffer.GetAddressOf();
+		return mCommonCB.Get();
+	}
+
+	ID3D11Buffer* GetShadowsCB()
+	{
+		return mShadowsCB.Get();
 	}
 
 	ID3D11BlendState* GetBlendState()
@@ -116,17 +141,25 @@ private:
 	ComPtr<ID3D11DeviceContext> mContext;
 
 	ComPtr<ID3D11PixelShader> mPixelShader;
-	ComPtr<ID3D11Buffer> mConstantBuffer;
+	ComPtr<ID3D11Buffer> mCommonCB;
+	ComPtr<ID3D11Buffer> mShadowsCB;
+	ComPtr<ID3D11BlendState> mBlendState;
 
-	struct ConstantBuffer
+	struct CommonCB
 	{
 		XMFLOAT4X4 viewProjInv;
-		XMFLOAT3   lightDir;
-		float      padding;
 	};
 
-	static_assert((sizeof(ConstantBuffer) % 16) == 0, "constant buffer size must be 16-byte aligned");
+	static_assert((sizeof(CommonCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
 
-	ComPtr<ID3D11BlendState> mBlendState;
+	struct ShadowsCB
+	{
+		XMFLOAT3   lightDir;
+		float      padding0;
+		XMFLOAT3   lightDirInv;
+		float      padding1;
+	};
+
+	static_assert((sizeof(ShadowsCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
 };
 

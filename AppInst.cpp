@@ -32,7 +32,7 @@ void AppInst::Update(const Timer& timer)
 {
 	AppBase::Update(timer);
 
-	mRayTracedShadows.UpdateCB(mCamera.GetViewProjInvF(),
+	mRayTracedShadows.UpdateCBs(mCamera.GetViewProjInvF(),
 							   mLighting.GetLightDirection(0));
 }
 
@@ -118,7 +118,12 @@ void AppInst::Draw(const Timer& timer)
 		mContext->PSSetShader(mRayTracedShadows.GetPixelShader(), nullptr, 0);
 
 		// set constant buffer
-		mContext->PSSetConstantBuffers(0, 1, mRayTracedShadows.GetAddressOfConstantBuffer());
+		ID3D11Buffer* CBs[] =
+		{
+			mRayTracedShadows.GetCommonCB(),
+			mRayTracedShadows.GetShadowsCB()
+		};
+		mContext->PSSetConstantBuffers(0, sizeof(CBs) / sizeof(CBs[0]), CBs);
 
 		// set shader resource views
 		ID3D11ShaderResourceView* SRVs[] =
@@ -126,7 +131,6 @@ void AppInst::Draw(const Timer& timer)
 			mDepthBufferSRV.Get(),
 			mBVH.GetBufferSRV()
 		};
-
 		mContext->PSSetShaderResources(0, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
 
 		// set blend state
