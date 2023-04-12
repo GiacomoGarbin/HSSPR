@@ -147,19 +147,22 @@
   <ItemGroup>
     <ClCompile Include="..\RenderToyD3D11\AppBase.cpp" />
     <ClCompile Include="..\RenderToyD3D11\Camera.cpp" />
+    <ClCompile Include="..\RenderToyD3D11\DDSTextureLoader11.cpp" />
     <ClCompile Include="..\RenderToyD3D11\MeshManager.cpp" />
     <ClCompile Include="..\RenderToyD3D11\MaterialManager.cpp" />
     <ClCompile Include="..\RenderToyD3D11\ObjectManager.cpp" />
+    <ClCompile Include="..\RenderToyD3D11\TextureManager.cpp" />
     <ClCompile Include="..\RenderToyD3D11\Timer.cpp" />
     <ClCompile Include="..\RenderToyD3D11\Utility.cpp" />
     <ClCompile Include="AppInst.cpp" />
     <ClCompile Include="BVH.cpp" />
-    <ClCompile Include="RayTracedShadows.cpp" />
+    <ClCompile Include="RayTraced.cpp" />
     <ClCompile Include="WinMain.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\RenderToyD3D11\AppBase.h" />
     <ClInclude Include="..\RenderToyD3D11\Camera.h" />
+    <ClInclude Include="..\RenderToyD3D11\DDSTextureLoader11.h" />
     <ClInclude Include="..\RenderToyD3D11\MeshManager.h" />
     <ClInclude Include="..\RenderToyD3D11\Lighting.h" />
     <ClInclude Include="..\RenderToyD3D11\MaterialManager.h" />
@@ -171,7 +174,7 @@
     <ClInclude Include="..\RenderToyD3D11\Utility.h" />
     <ClInclude Include="AppInst.h" />
     <ClInclude Include="BVH.h" />
-    <ClInclude Include="RayTracedShadows.h" />
+    <ClInclude Include="RayTraced.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

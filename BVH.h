@@ -11,7 +11,7 @@ using namespace DirectX;
 //
 #include "MeshManager.h"
 #include "ObjectManager.h"
-#include "RayTracedShadows.h"
+#include "RayTraced.h"
 #include "Utility.h"
 
 class BVH
@@ -77,6 +77,7 @@ public:
 		XMVECTOR v2;
 
 		std::size_t offset;
+		std::size_t material;
 
 		float surfaceAreaLeft;
 		float surfaceAreaRight;
@@ -127,6 +128,8 @@ public:
 
 				triangle.offset = offset;
 				offset += 3;
+
+				triangle.material = object.material;
 
 				triangle.aabb.Expand(v0);
 				triangle.aabb.Expand(v1);
@@ -237,8 +240,8 @@ private:
 
 			node->bIsNode = false;
 
-			//node->data.object = triangles[begin].object;
 			node->data.offset = triangles[begin].offset;
+			node->data.material = triangles[begin].material;
 
 			node->data.v0 = triangles[begin].v0;
 			node->data.v1 = triangles[begin].v1;
@@ -440,6 +443,9 @@ private:
 
 				// when on the left branch, how many float4 elements we need to skip to reach the right branch?
 				leaf->v0.w = sizeof(Leaf) / sizeof(XMFLOAT4);
+
+				leaf->e1.w = treeNode->data.offset; // triangle index to fetch normals and uvs
+				leaf->e2.w = treeNode->data.material; // material index
 
 				dataOffset += sizeof(Leaf);
 			}

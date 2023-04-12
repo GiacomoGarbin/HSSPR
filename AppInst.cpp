@@ -18,12 +18,64 @@ bool AppInst::Init()
 
 	mCamera.SetPosition(0.0f, 0.0f, 0.0f);
 
-	// build objects
+
+	MeshData mesh = MeshManager::CreateBox(1, 1, 1);
+
+	Material material;
+	material.diffuse = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+	material.fresnel = XMFLOAT3(0.6f, 0.6f, 0.6f);
+	material.roughness = 0.2f;
+	material.diffuseTextureIndex = 0; // mTextureManager.LoadTexture("textures/WoodCrate01.dds");
+
+	Object object;
+	object.mesh = mMeshManager.AddMesh("box", mesh);
+	object.material = mMaterialManager.AddMaterial("default", material);
+	XMStoreFloat4x4(&object.world, XMMatrixScaling(10, 1, 10) * XMMatrixTranslation(0, -1, 0));
+
+	mObjectManager.AddObject(object);
+
+	XMVECTORF32 colors[] =
+	{
+		DirectX::Colors::Crimson,
+		DirectX::Colors::Cyan,
+		DirectX::Colors::Yellow,
+		DirectX::Colors::Green,
+		DirectX::Colors::Red,
+		DirectX::Colors::Orange,
+		DirectX::Colors::Blue,
+		DirectX::Colors::Violet,
+		DirectX::Colors::Brown,
+	};
+
+	for (float x = -1; x <= +1; ++x)
+	{
+		for (float z = -1; z <= +1; ++z)
+		{
+			//if (x != 0 || z != 0) continue;
+
+			int i = (x + 1) * 3 + (z + 1);
+
+			XMStoreFloat4x4(&object.world, XMMatrixTranslation(x * 2, 0, z * 2));
+
+			XMStoreFloat4(&material.diffuse, colors[i]);
+			object.material = mMaterialManager.AddMaterial("box" + std::to_string(i), material);
+
+			mObjectManager.AddObject(object);
+		}
+	}
+
+	const std::vector<std::string> paths =
+	{
+		"textures/WoodCrate01.dds",
+		"textures/WoodCrate02.dds",
+	};
+
+	mTextureManager.LoadTexturesIntoTexture2DArray("DiffuseTextureArray", paths);
 
 	mBVH.Init(mDevice, mContext);
 	mBVH.BuildBVH(mObjectManager.GetObjects(), mMeshManager);
 
-	mRayTracedShadows.Init(mDevice, mContext);
+	mRayTraced.Init(mDevice, mContext);
 
 	return true;
 }
@@ -32,8 +84,9 @@ void AppInst::Update(const Timer& timer)
 {
 	AppBase::Update(timer);
 
-	mRayTracedShadows.UpdateCBs(mCamera.GetViewProjInvF(),
-							   mLighting.GetLightDirection(0));
+	mRayTraced.UpdateCBs(mCamera.GetViewProjInvF(),
+						 mLighting.GetLightDirection(0),
+						 mCamera.GetPositionF());
 }
 
 void AppInst::Draw(const Timer& timer)
@@ -88,8 +141,22 @@ void AppInst::Draw(const Timer& timer)
 	// set pixel shader
 	mContext->PSSetShader(mDefaultPS.Get(), nullptr, 0);
 
+	// set sampler states
+	ID3D11SamplerState* samplers[]
+	{
+		nullptr,
+		nullptr,
+		mSamplerLinearWrap.Get(),
+	};
+	mContext->PSSetSamplers(0, sizeof(samplers) / sizeof(samplers[0]), samplers);
+
 	// set shader resource views
-	mContext->PSSetShaderResources(0, 1, mMaterialManager.GetAddressOfBufferSRV());
+	ID3D11ShaderResourceView* SRVs[] =
+	{
+		mMaterialManager.GetBufferSRV(),
+		mTextureManager.GetSRV(0),
+	};
+	mContext->PSSetShaderResources(0, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
 
 	for (std::size_t i = 0; i < mObjectManager.GetObjects().size(); ++i)
 	{
@@ -101,7 +168,7 @@ void AppInst::Draw(const Timer& timer)
 		mContext->DrawIndexed(mesh.indexCount, mesh.indexStart, mesh.vertexBase);
 	}
 
-	// ray traced shadows
+	// ray traced
 	{
 		// set back buffer and depth stencil buffer
 		mContext->OMSetRenderTargets(1,
@@ -114,35 +181,52 @@ void AppInst::Draw(const Timer& timer)
 		// set vertex shader
 		mContext->VSSetShader(mFullscreenVS.Get(), nullptr, 0);
 
-		// set pixel shader
-		mContext->PSSetShader(mRayTracedShadows.GetPixelShader(), nullptr, 0);
-
-		// set constant buffer
-		ID3D11Buffer* CBs[] =
-		{
-			mRayTracedShadows.GetCommonCB(),
-			mRayTracedShadows.GetShadowsCB()
-		};
-		mContext->PSSetConstantBuffers(0, sizeof(CBs) / sizeof(CBs[0]), CBs);
-
 		// set shader resource views
 		ID3D11ShaderResourceView* SRVs[] =
 		{
 			mDepthBufferSRV.Get(),
-			mBVH.GetBufferSRV()
+			mBVH.GetBufferSRV(),
 		};
-		mContext->PSSetShaderResources(0, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
+		mContext->PSSetShaderResources(2, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
 
 		// set blend state
-		mContext->OMSetBlendState(mRayTracedShadows.GetBlendState(), nullptr, 0xffffffff);
+		mContext->OMSetBlendState(mRayTraced.GetBlendState(), nullptr, 0xffffffff);
 
-		// draw
-		mContext->Draw(3, 0);
+		// shadows
+		{
+			// set pixel shader
+			mContext->PSSetShader(mRayTraced.GetShadowsPS(), nullptr, 0);
+
+			// set constant buffer
+			ID3D11Buffer* CBs[] =
+			{
+				mRayTraced.GetShadowsCB()
+			};
+			mContext->PSSetConstantBuffers(1, sizeof(CBs) / sizeof(CBs[0]), CBs);
+
+			// draw
+			mContext->Draw(3, 0);
+		}
+
+		// reflections
+		{
+			// set pixel shader
+			mContext->PSSetShader(mRayTraced.GetReflectionsPS(), nullptr, 0);
+
+			// set constant buffer
+			ID3D11Buffer* CBs[] =
+			{
+				mRayTraced.GetReflectionsCB()
+			};
+			mContext->PSSetConstantBuffers(1, sizeof(CBs) / sizeof(CBs[0]), CBs);
+
+			// draw
+			mContext->Draw(3, 0);
+		}
 
 		// set shader resource views
 		ID3D11ShaderResourceView* pNullSRV = nullptr;
-		mContext->PSSetShaderResources(0, 1, &pNullSRV);
-
+		mContext->PSSetShaderResources(2, 1, &pNullSRV);
 
 		mContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 	}

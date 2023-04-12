@@ -4,7 +4,7 @@
 
 //
 #include "BVH.h"
-#include "RayTracedShadows.h"
+#include "RayTraced.h"
 
 class AppInst : public AppBase
 {
@@ -21,5 +21,5 @@ public:
 private:
 
     BVH mBVH;
-    RayTracedShadows mRayTracedShadows;
+    RayTraced mRayTraced;
 };
