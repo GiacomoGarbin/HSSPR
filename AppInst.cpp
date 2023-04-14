@@ -16,7 +16,7 @@ bool AppInst::Init()
 		return false;
 	}
 
-	mCamera.SetPosition(0.0f, 0.0f, 0.0f);
+	mCamera.SetPosition(0.0f, 0.0f, -5.0f);
 
 
 	MeshData mesh = MeshManager::CreateBox(1, 1, 1);
@@ -73,7 +73,7 @@ bool AppInst::Init()
 	mTextureManager.LoadTexturesIntoTexture2DArray("DiffuseTextureArray", paths);
 
 	mBVH.Init(mDevice, mContext);
-	mBVH.BuildBVH(mObjectManager.GetObjects(), mMeshManager);
+	mBVH.BuildBVH(mObjectManager.GetObjects(), mMeshManager, mMaterialManager);
 
 	mRayTraced.Init(mDevice, mContext);
 
@@ -185,7 +185,8 @@ void AppInst::Draw(const Timer& timer)
 		ID3D11ShaderResourceView* SRVs[] =
 		{
 			mDepthBufferSRV.Get(),
-			mBVH.GetBufferSRV(),
+			mBVH.GetTreeBufferSRV(),
+			mBVH.GetVertexBufferSRV(),
 		};
 		mContext->PSSetShaderResources(2, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
 

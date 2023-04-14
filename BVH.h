@@ -9,6 +9,7 @@
 using namespace DirectX;
 
 //
+#include "MaterialManager.h"
 #include "MeshManager.h"
 #include "ObjectManager.h"
 #include "RayTraced.h"
@@ -95,18 +96,26 @@ public:
 		TreeNode* right;
 	};
 
-	void BuildBVH(const std::vector<Object>& objects, const MeshManager& meshManager)
+	void BuildBVH(const std::vector<Object>& objects,
+				  const MeshManager& meshManager,
+				  const MaterialManager& materialManager)
 	{
 		std::vector<TriangleData> triangles;
-		std::size_t offset = 0; // triangle offset in normals and uvs buffer
+		std::size_t offset = 0; // triangle offset in vertex buffer
+
+		std::vector<XMFLOAT4> vertices;
 
 		for (std::size_t j = 0; j < objects.size(); ++j)
 		{
 			const Object& object = objects[j];
 			const MeshData& mesh = meshManager.GetMesh(object.mesh);
 			const XMMATRIX world = XMLoadFloat4x4(&object.world);
+			const Material& material = materialManager.GetMaterial(object.material);
+			const XMMATRIX uvTransform = XMLoadFloat4x4(&object.uvTransform) * XMLoadFloat4x4(&material.uvTransform);
 
 			triangles.reserve(triangles.size() + (mesh.indexCount / 3));
+
+			vertices.reserve(vertices.size() + mesh.indexCount * 2);
 
 			for (std::size_t i = 0; i < mesh.indexCount; i += 3)
 			{
@@ -127,7 +136,7 @@ public:
 				TriangleData triangle;
 
 				triangle.offset = offset;
-				offset += 3;
+				offset += 3*2;
 
 				triangle.material = object.material;
 
@@ -143,11 +152,64 @@ public:
 				triangle.v2 = v2;
 
 				triangles.push_back(triangle);
+
+				// vertex buffer
+				{
+					XMVECTOR n0 = XMLoadFloat3(&mesh.vertices[i0].normal);
+					XMVECTOR n1 = XMLoadFloat3(&mesh.vertices[i1].normal);
+					XMVECTOR n2 = XMLoadFloat3(&mesh.vertices[i2].normal);
+
+					n0 = XMVector3TransformNormal(n0, world);
+					n1 = XMVector3TransformNormal(n1, world);
+					n2 = XMVector3TransformNormal(n2, world);
+
+					XMVECTOR u0 = XMLoadFloat2(&mesh.vertices[i0].uv);
+					XMVECTOR u1 = XMLoadFloat2(&mesh.vertices[i1].uv);
+					XMVECTOR u2 = XMLoadFloat2(&mesh.vertices[i2].uv);
+
+					//u0 = XMVector2Transform(u0, uvTransform);
+					//u1 = XMVector2Transform(u1, uvTransform);
+					//u2 = XMVector2Transform(u2, uvTransform);
+
+					XMVECTOR t0 = XMLoadFloat3(&mesh.vertices[i0].tangent);
+					XMVECTOR t1 = XMLoadFloat3(&mesh.vertices[i1].tangent);
+					XMVECTOR t2 = XMLoadFloat3(&mesh.vertices[i2].tangent);
+
+					t0 = XMVector3TransformNormal(t0, world);
+					t1 = XMVector3TransformNormal(t1, world);
+					t2 = XMVector3TransformNormal(t2, world);
+
+					XMFLOAT4 a, b;
+
+					XMStoreFloat4(&a, n0);
+					a.w = XMVectorGetX(u0);
+					vertices.push_back(a);
+
+					XMStoreFloat4(&b, t0);
+					b.w = XMVectorGetY(u0);
+					vertices.push_back(b);
+
+					XMStoreFloat4(&a, n1);
+					a.w = XMVectorGetX(u1);
+					vertices.push_back(a);
+
+					XMStoreFloat4(&b, t1);
+					b.w = XMVectorGetY(u1);
+					vertices.push_back(b);
+
+					XMStoreFloat4(&a, n2);
+					a.w = XMVectorGetX(u2);
+					vertices.push_back(a);
+
+					XMStoreFloat4(&b, t2);
+					b.w = XMVectorGetY(u2);
+					vertices.push_back(b);
+				}
 			}
 		}
 
-		// create normals and uvs buffer
-		{}
+		// vertex buffer
+		WriteVertexBuffer(vertices);
 
 		TreeNode* root = CreateTreeNode(triangles, 0, int(triangles.size() - 1));
 
@@ -209,14 +271,14 @@ public:
 		}
 	}
 
-	ID3D11ShaderResourceView* GetBufferSRV()
+	ID3D11ShaderResourceView* GetTreeBufferSRV()
 	{
-		return mBufferSRV.Get();
+		return mTreeBufferSRV.Get();
 	}
 
-	ID3D11ShaderResourceView** GetAddressOfBufferSRV()
+	ID3D11ShaderResourceView* GetVertexBufferSRV()
 	{
-		return mBufferSRV.GetAddressOf();
+		return mVertexBufferSRV.Get();
 	}
 
 private:
@@ -444,7 +506,7 @@ private:
 				// when on the left branch, how many float4 elements we need to skip to reach the right branch?
 				leaf->v0.w = sizeof(Leaf) / sizeof(XMFLOAT4);
 
-				leaf->e1.w = treeNode->data.offset; // triangle index to fetch normals and uvs
+				leaf->e1.w = treeNode->data.offset; // triangle index to fetch vertex data
 				leaf->e2.w = treeNode->data.material; // material index
 
 				dataOffset += sizeof(Leaf);
@@ -475,12 +537,12 @@ private:
 		D3D11_SUBRESOURCE_DATA initData;
 		initData.pSysMem = data;
 
-		ThrowIfFailed(mDevice->CreateBuffer(&desc, &initData, &mBuffer));
-		NameResource(mBuffer.Get(), "BVHTree");
+		ThrowIfFailed(mDevice->CreateBuffer(&desc, &initData, &mTreeBuffer));
+		NameResource(mTreeBuffer.Get(), "BVHTreeBuffer");
 
 #if STRUCTURED
-		ThrowIfFailed(mDevice->CreateShaderResourceView(mBuffer.Get(), nullptr, &mBufferSRV));
-		NameResource(mBufferSRV.Get(), "BVHTreeSRV");
+		ThrowIfFailed(mDevice->CreateShaderResourceView(mTreeBuffer.Get(), nullptr, &mTreeBufferSRV));
+		NameResource(mTreeBufferSRV.Get(), "BVHTreeBufferSRV");
 #else
 		{
 			D3D11_SHADER_RESOURCE_VIEW_DESC desc;
@@ -490,13 +552,13 @@ private:
 			desc.BufferEx.NumElements = size / sizeof(float);
 			desc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
 
-			ThrowIfFailed(mDevice->CreateShaderResourceView(mBuffer.Get(), &desc, &mBufferSRV));
-			NameResource(mBufferSRV.Get(), "BVHTreeSRV");
+			ThrowIfFailed(mDevice->CreateShaderResourceView(mTreeBuffer.Get(), &desc, &mTreeBufferSRV));
+			NameResource(mTreeBufferSRV.Get(), "BVHTreeBufferSRV");
 		}
 #endif
 
 		//D3D11_MAPPED_SUBRESOURCE mapped;
-		//mContext->Map(mBuffer.Get(), 0, D3D11_MAP_WRITE, 0, &mapped);
+		//mContext->Map(mTreeBuffer.Get(), 0, D3D11_MAP_WRITE, 0, &mapped);
 
 		//AABB* buffer = static_cast<AABB*>(mapped.pData);
 
@@ -505,17 +567,35 @@ private:
 
 		//buffer[std::size_t(index - 1)].max.w = -1; // mark last node ?
 
-		//mContext->Unmap(mBuffer.Get(), 0);
+		//mContext->Unmap(mTreeBuffer.Get(), 0);
 	}
 
+	void WriteVertexBuffer(const std::vector<XMFLOAT4>& vertices)
+	{
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = vertices.size() * sizeof(XMFLOAT4);
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		desc.StructureByteStride = sizeof(XMFLOAT4);
+
+		D3D11_SUBRESOURCE_DATA initData;
+		initData.pSysMem = vertices.data();
+
+		ThrowIfFailed(mDevice->CreateBuffer(&desc, &initData, &mVertexBuffer));
+		NameResource(mVertexBuffer.Get(), "BVHVertexBuffer");
+
+		ThrowIfFailed(mDevice->CreateShaderResourceView(mVertexBuffer.Get(), nullptr, &mVertexBufferSRV));
+		NameResource(mVertexBufferSRV.Get(), "BVHVertexBufferSRV");
+	}
 
 	ComPtr<ID3D11Device> mDevice;
 	ComPtr<ID3D11DeviceContext> mContext;
 
-	ComPtr<ID3D11Buffer> mBuffer;
-	ComPtr<ID3D11ShaderResourceView> mBufferSRV;
+	ComPtr<ID3D11Buffer> mTreeBuffer;
+	ComPtr<ID3D11ShaderResourceView> mTreeBufferSRV;
 
-	// vextex data:
-	// - normals
-	// - uvs
+	ComPtr<ID3D11Buffer> mVertexBuffer;
+	ComPtr<ID3D11ShaderResourceView> mVertexBufferSRV;
 };

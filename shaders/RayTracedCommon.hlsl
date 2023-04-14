@@ -3,7 +3,7 @@
 #include "../RenderToyD3D11/shaders/Fullscreen.hlsl"
 
 #if NORMALS
-Texture2D<float4> DepthNormalBuffer : register(t2);
+Texture2D<float4> NormalDepthBuffer : register(t2);
 #else
 Texture2D<float> DepthBuffer : register(t2);
 #endif
@@ -12,6 +12,15 @@ Texture2D<float> DepthBuffer : register(t2);
 StructuredBuffer<float4> BVH : register(t3);
 #else
 ByteAddressBuffer BVH : register(t3);
+#endif
+
+#if !SHADOWS
+#if STRUCTURED
+StructuredBuffer<float4>
+#else
+ByteAddressBuffer
+#endif
+VertexBuffer : register(t4);
 #endif
 
 #define kEpsilon 0.00001f
@@ -55,21 +64,21 @@ bool RayTriIntersect(const float3 origin,
                      const float3 e1, // v1 - v0
                      const float3 e2, // v2 - v0
                      inout float t,
-                     inout float2 barycentricCoords)
+                     inout float2 bc)
 {
 	const float3 s1 = cross(dir.xyz, e2);
 	const float  invd = 1.0 / (dot(s1, e1));
 	const float3 d = origin.xyz - v0;
-	barycentricCoords.x = dot(d, s1) * invd;
+	bc.x = dot(d, s1) * invd;
 	const float3 s2 = cross(d, e1);
-	barycentricCoords.y = dot(dir.xyz, s2) * invd;
+	bc.y = dot(dir.xyz, s2) * invd;
 	t = dot(e2, s2) * invd;
 
 	if (
 #if BACKFACE_CULLING
 		dot(s1, e1) < -kEpsilon ||
 #endif
-		barycentricCoords.x < 0.0 || barycentricCoords.x > 1.0 || barycentricCoords.y < 0.0 || (barycentricCoords.x + barycentricCoords.y) > 1.0 || t < 0.0 || t > 1e9)
+		bc.x < 0.0 || bc.x > 1.0 || bc.y < 0.0 || (bc.x + bc.y) > 1.0 || t < 0.0 || t > 1e9)
 	{
 		return false;
 	}
@@ -84,10 +93,13 @@ bool RayTraced(const float3 worldPos,
 			   const float3 rayDirInv,
 #if SHADOWS
 			   inout float t,
-			   inout float2 barycentricCoords)
+			   inout float2 bc)
 #else
 			   inout int material,
-			   inout float3 normal)
+               inout float3 hitWorldPos,
+			   inout float3 normal,
+			   inout float2 uv,
+			   inout float3 tangent)
 #endif
 {
 	bool collision = false;
@@ -99,17 +111,14 @@ bool RayTraced(const float3 worldPos,
 	bool hit = false;
 
 	float t = 0;
-	float2 barycentricCoords = 0;
-
-	// int material = -1;
-	// float3 normal = 0;
+	float2 bc = 0; // barycentric coords
 #endif
 
     [loop]
     while (offsetToNextNode != 0)
     {
-        float4 element0 = BVH[dataOffset++];
-        float4 element1 = BVH[dataOffset++];
+        const float4 element0 = BVH[dataOffset++];
+        const float4 element1 = BVH[dataOffset++];
 
         offsetToNextNode = int(element0.w);
 
@@ -129,10 +138,10 @@ bool RayTraced(const float3 worldPos,
         }
         else if (offsetToNextNode > 0) // leaf
         {
-            float4 element2 = BVH[dataOffset++];
+            const float4 element2 = BVH[dataOffset++];
 
             // check for intersection with leaf triangle
-            collision = RayTriIntersect(worldPos, rayDir, element0.xyz, element1.xyz, element2.xyz, t, barycentricCoords);
+            collision = RayTriIntersect(worldPos, rayDir, element0.xyz, element1.xyz, element2.xyz, t, bc);
 
 #if SHADOWS
             if (collision)
@@ -145,16 +154,43 @@ bool RayTraced(const float3 worldPos,
 				minDist = t;
 				hit = true;
 
-				material = element2.w;
-				normal = normalize(cross(element1.xyz, element2.xyz));
+                const float3 v0 = element0.xyz;
+                const float3 v1 = element1.xyz + v0;
+                const float3 v2 = element2.xyz + v0;
+
+                // triangle index
+                int offset = element1.w;
+                
+                float4 e0 = VertexBuffer[offset++];
+                float4 e1 = VertexBuffer[offset++];
+
+                const float3 n0 = e0.xyz;
+                const float3 t0 = e1.xyz;
+                const float2 u0 = float2(e0.w, e1.w);
+                
+                e0 = VertexBuffer[offset++];
+                e1 = VertexBuffer[offset++];
+
+                const float3 n1 = e0.xyz;
+                const float3 t1 = e1.xyz;
+                const float2 u1 = float2(e0.w, e1.w);
+                
+                e0 = VertexBuffer[offset++];
+                e1 = VertexBuffer[offset++];
+
+                const float3 n2 = e0.xyz;
+                const float3 t2 = e1.xyz;
+                const float2 u2 = float2(e0.w, e1.w);
+
+				material    = element2.w;
+                hitWorldPos = v0 * (1 - bc.x - bc.y) + v1 * bc.x + v2 * bc.y;
+                normal      = n0 * (1 - bc.x - bc.y) + n1 * bc.x + n2 * bc.y;
+                uv          = u0 * (1 - bc.x - bc.y) + u1 * bc.x + u2 * bc.y;
+                tangent     = t0 * (1 - bc.x - bc.y) + t1 * bc.x + t2 * bc.y;
             }
 #endif
         }
     }
-
-#if !SHADOWS
-	t = material;
-#endif
 
 #if SHADOWS
 	return collision;
