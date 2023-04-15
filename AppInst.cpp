@@ -47,15 +47,17 @@ bool AppInst::Init()
 		DirectX::Colors::Brown,
 	};
 
-	for (float x = -1; x <= +1; ++x)
+	float radius = 1;
+
+	for (float x = -radius; x <= +radius; ++x)
 	{
-		for (float z = -1; z <= +1; ++z)
+		for (float z = -radius; z <= +radius; ++z)
 		{
 			//if (x != 0 || z != 0) continue;
 
-			int i = (x + 1) * 3 + (z + 1);
+			int i = (x + radius) * (radius*2+1) + (z + radius);
 
-			XMStoreFloat4x4(&object.world, XMMatrixTranslation(x * 2, 0, z * 2));
+			XMStoreFloat4x4(&object.world, XMMatrixTranslation(x * 2, 1, z * 2));
 
 			XMStoreFloat4(&material.diffuse, colors[i]);
 			object.material = mMaterialManager.AddMaterial("box" + std::to_string(i), material);
@@ -192,6 +194,8 @@ void AppInst::Draw(const Timer& timer)
 
 		// set blend state
 		mContext->OMSetBlendState(mRayTraced.GetBlendState(), nullptr, 0xffffffff);
+		
+		GPUProfilerTimestamp(TimestampQueryType::RayTracedBegin);
 
 		// shadows
 		{
@@ -207,6 +211,8 @@ void AppInst::Draw(const Timer& timer)
 
 			// draw
 			mContext->Draw(3, 0);
+
+			GPUProfilerTimestamp(TimestampQueryType::RayTracedShadows);
 		}
 
 		// reflections
@@ -223,6 +229,8 @@ void AppInst::Draw(const Timer& timer)
 
 			// draw
 			mContext->Draw(3, 0);
+
+			GPUProfilerTimestamp(TimestampQueryType::RayTracedReflections);
 		}
 
 		// set shader resource views

@@ -117,7 +117,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\D3PO\Repositories\RenderToyD3D11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\D3PO\Repositories\RenderToyD3D11;C:\Users\D3PO\Repositories\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -134,7 +134,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\D3PO\Repositories\RenderToyD3D11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\D3PO\Repositories\RenderToyD3D11;C:\Users\D3PO\Repositories\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -145,6 +145,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\imgui\backends\imgui_impl_dx11.cpp" />
+    <ClCompile Include="..\imgui\backends\imgui_impl_win32.cpp" />
+    <ClCompile Include="..\imgui\imgui.cpp" />
+    <ClCompile Include="..\imgui\imgui_demo.cpp" />
+    <ClCompile Include="..\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\RenderToyD3D11\AppBase.cpp" />
     <ClCompile Include="..\RenderToyD3D11\Camera.cpp" />
     <ClCompile Include="..\RenderToyD3D11\DDSTextureLoader11.cpp" />
@@ -160,6 +167,9 @@
     <ClCompile Include="WinMain.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\imgui\backends\imgui_impl_dx11.h" />
+    <ClInclude Include="..\imgui\backends\imgui_impl_win32.h" />
+    <ClInclude Include="..\imgui\imgui.h" />
     <ClInclude Include="..\RenderToyD3D11\AppBase.h" />
     <ClInclude Include="..\RenderToyD3D11\Camera.h" />
     <ClInclude Include="..\RenderToyD3D11\DDSTextureLoader11.h" />
