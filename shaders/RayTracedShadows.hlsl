@@ -9,7 +9,7 @@ cbuffer RayTracedShadowsCB : register(b1)
     float    padding1x;
 };
 
-float4 RayTracedShadowsPS(const VertexOut pin) : SV_Target
+float RayTracedShadowsPS(const VertexOut pin) : SV_Target
 {
     const float depth = DepthBuffer.Load(uint3(pin.position.xy, 0));
     const float4 gbuffer = GBuffer.Load(uint3(pin.position.xy, 0));
@@ -36,5 +36,5 @@ float4 RayTracedShadowsPS(const VertexOut pin) : SV_Target
         discard;
     }
 
-    return float4(0,0,0,0.25f);
+    return 0;
 }

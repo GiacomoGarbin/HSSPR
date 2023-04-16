@@ -2,18 +2,15 @@
 #include "../RenderToyD3D11/shaders/Common.hlsl"
 #include "../RenderToyD3D11/shaders/Fullscreen.hlsl"
 
-Texture2D<float> DepthBuffer : register(t2);
-Texture2D<float4> GBuffer : register(t3);
+Texture2D<float> DepthBuffer : register(t3);
+Texture2D<float4> GBuffer : register(t4);
 
 #if STRUCTURED
 StructuredBuffer<float4>
 #else
 ByteAddressBuffer
 #endif
-BVH : register(t4);
-
-#define kEpsilon 0.00001f
-#define kSelfShadowOffset 0.005f
+BVH : register(t5);
 
 #if !SHADOWS // reflections only
 #if STRUCTURED
@@ -21,7 +18,7 @@ StructuredBuffer<float4>
 #else
 ByteAddressBuffer
 #endif
-VertexBuffer : register(t5);
+VertexBuffer : register(t6);
 
 // #define FLT_MAX 3.402823466e+38f
 #define FLT_MAX 1000000000
@@ -36,6 +33,9 @@ struct HitPoint
     int materialIndex;
 };
 #endif // !SHADOWS
+
+#define kEpsilon 0.00001f
+#define kSelfShadowOffset 0.005f
 
 float3 GetWorldPos(const float2 uv, const float depth)
 {
