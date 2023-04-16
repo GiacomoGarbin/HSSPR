@@ -2,15 +2,15 @@
 #include "../RenderToyD3D11/shaders/Common.hlsl"
 #include "../RenderToyD3D11/shaders/Fullscreen.hlsl"
 
-Texture2D<float> DepthBuffer : register(t3);
-Texture2D<float4> GBuffer : register(t4);
+Texture2D<float> DepthBuffer : register(t4);
+Texture2D<float4> GBuffer : register(t5);
 
 #if STRUCTURED
 StructuredBuffer<float4>
 #else
 ByteAddressBuffer
 #endif
-BVH : register(t5);
+BVH : register(t6);
 
 #if !SHADOWS // reflections only
 #if STRUCTURED
@@ -18,7 +18,7 @@ StructuredBuffer<float4>
 #else
 ByteAddressBuffer
 #endif
-VertexBuffer : register(t6);
+VertexBuffer : register(t7);
 
 // #define FLT_MAX 3.402823466e+38f
 #define FLT_MAX 1000000000

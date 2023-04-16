@@ -33,30 +33,56 @@ bool AppInst::Init()
 	object.material = mMaterialManager.AddMaterial("default", material);
 	XMStoreFloat4x4(&object.world, XMMatrixScaling(10, 1, 10) * XMMatrixTranslation(0, -1, 0));
 
-	D3D11_DEPTH_STENCIL_DESC desc;
-	desc.DepthEnable = TRUE;
-	desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-	desc.DepthFunc = D3D11_COMPARISON_LESS;
-	desc.StencilEnable = TRUE;
-	desc.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
-	desc.StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
-	desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-	desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
-	desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_ZERO;
-	desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
-	desc.BackFace = desc.FrontFace;
+	// pixel shader
+	{
+		std::wstring path = L"../RenderToyD3D11/shaders/Default.hlsl";
 
-	ThrowIfFailed(mDevice->CreateDepthStencilState(&desc, &object.depthStencilState));
-	NameResource(object.depthStencilState.Get(), "ReflectiveSurfaceDSS");
+		const D3D_SHADER_MACRO defines[] =
+		{
+			"REFLECTIVE_SURFACE", "1",
+			nullptr, nullptr
+		};
 
-	mObjectManager.AddObject(object);
+		ComPtr<ID3DBlob> pCode = CompileShader(path,
+											   defines,
+											   "DefaultPS",
+											   ShaderTarget::PS);
 
-	desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_INCR_SAT;
-	desc.BackFace = desc.FrontFace;
+		ThrowIfFailed(mDevice->CreatePixelShader(pCode->GetBufferPointer(),
+												 pCode->GetBufferSize(),
+												 nullptr,
+												 &object.pixelShader));
 
-	object.depthStencilState.Reset();
-	ThrowIfFailed(mDevice->CreateDepthStencilState(&desc, &object.depthStencilState));
-	NameResource(object.depthStencilState.Get(), "NonReflectiveSurfaceDSS");
+		NameResource(object.pixelShader.Get(), "DefaultReflectiveSurfacePS");
+	}
+
+	// depth stencil state
+	{
+		D3D11_DEPTH_STENCIL_DESC desc;
+		desc.DepthEnable = TRUE;
+		desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		desc.DepthFunc = D3D11_COMPARISON_LESS;
+		desc.StencilEnable = TRUE;
+		desc.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
+		desc.StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+		desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+		desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_ZERO;
+		desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+		desc.BackFace = desc.FrontFace;
+
+		ThrowIfFailed(mDevice->CreateDepthStencilState(&desc, &object.depthStencilState));
+		NameResource(object.depthStencilState.Get(), "ReflectiveSurfaceDSS");
+
+		mObjectManager.AddObject(object);
+
+		desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_INCR_SAT;
+		desc.BackFace = desc.FrontFace;
+
+		object.depthStencilState.Reset();
+		ThrowIfFailed(mDevice->CreateDepthStencilState(&desc, &object.depthStencilState));
+		NameResource(object.depthStencilState.Get(), "NonReflectiveSurfaceDSS");
+	}
 
 	XMVECTORF32 colors[] =
 	{
@@ -75,6 +101,8 @@ bool AppInst::Init()
 
 	//material.roughness = 1;
 	material.diffuseTextureIndex = 0;
+
+	object.pixelShader.Reset();
 
 	for (float x = -radius; x <= +radius; ++x)
 	{
@@ -150,6 +178,9 @@ void AppInst::Draw(const Timer& timer)
 	// depth/gbuffer prepass
 	{
 		mUserDefinedAnnotation->BeginEvent(L"depth/gbuffer prepass");
+#if IMGUI
+		GPUProfilerTimestamp(TimestampQueryType::DepthGbufferPrepassBegin);
+#endif // IMGUI
 
 		// clear depth stencil buffer
 		mContext->ClearDepthStencilView(mDepthStencilBufferDSV.Get(),
@@ -209,18 +240,22 @@ void AppInst::Draw(const Timer& timer)
 			{
 				mContext->OMSetDepthStencilState(object.depthStencilState.Get(), object.stencilRef);
 			}
-			else
-			{
-				mContext->OMSetDepthStencilState(nullptr, 0);
-			}
 
 			// draw
 			mContext->DrawIndexed(mesh.indexCount, mesh.indexStart, mesh.vertexBase);
+
+			if (object.depthStencilState.Get())
+			{
+				mContext->OMSetDepthStencilState(nullptr, 0);
+			}
 		}
 
 		// clear depth stencil state
 		mContext->OMSetDepthStencilState(nullptr, 0);
 
+#if IMGUI
+		GPUProfilerTimestamp(TimestampQueryType::DepthGbufferPrepassEnd);
+#endif // IMGUI
 		mUserDefinedAnnotation->EndEvent();
 	}
 
@@ -230,13 +265,14 @@ void AppInst::Draw(const Timer& timer)
 	// raytraced shadows
 	{
 		mUserDefinedAnnotation->BeginEvent(L"raytraced shadows");
+#if IMGUI
+		GPUProfilerTimestamp(TimestampQueryType::RayTracedShadowsBegin);
+#endif // IMGUI
 
-		GPUProfilerTimestamp(TimestampQueryType::RayTracedBegin);
-
-		// clear shadow resolve
+		// clear shadow render target
 		mContext->ClearRenderTargetView(mShadowsResolveRTV.Get(), DirectX::Colors::White);
 
-		// set back buffer
+		// set shadow render target
 		mContext->OMSetRenderTargets(1,
 									 mShadowsResolveRTV.GetAddressOf(),
 									 nullptr);
@@ -254,10 +290,7 @@ void AppInst::Draw(const Timer& timer)
 			mGBufferSRV.Get(),
 			mBVH.GetTreeBufferSRV(),
 		};
-		mContext->PSSetShaderResources(3, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
-
-		//// set blend state
-		//mContext->OMSetBlendState(mRayTraced.GetBlendState(), nullptr, 0xffffffff);
+		mContext->PSSetShaderResources(4, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
 
 		// set pixel shader
 		mContext->PSSetShader(mRayTraced.GetShadowsPS(), nullptr, 0);
@@ -276,23 +309,84 @@ void AppInst::Draw(const Timer& timer)
 			nullptr,
 			nullptr,
 		};
-		mContext->PSSetShaderResources(3, sizeof(pNullSRVs) / sizeof(pNullSRVs[0]), pNullSRVs);
+		mContext->PSSetShaderResources(4, sizeof(pNullSRVs) / sizeof(pNullSRVs[0]), pNullSRVs);
 
-		//mContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
-
-		//mContext->OMSetDepthStencilState(nullptr, 0);
-
-		GPUProfilerTimestamp(TimestampQueryType::RayTracedShadows);
-
+#if IMGUI
+		GPUProfilerTimestamp(TimestampQueryType::RayTracedShadowsEnd);
+#endif // IMGUI
 		mUserDefinedAnnotation->EndEvent();
 	}
 	
 	// SSPR
+	
 	// raytraced reflections
+	{
+		mUserDefinedAnnotation->BeginEvent(L"raytraced reflections");
+#if IMGUI
+		GPUProfilerTimestamp(TimestampQueryType::RayTracedReflectionsBegin);
+#endif // IMGUI
+
+		// clear reflections render target
+		mContext->ClearRenderTargetView(mReflectionsResolveRTV.Get(), DirectX::Colors::Transparent);
+
+		// set reflections render target
+		mContext->OMSetRenderTargets(1,
+									 mReflectionsResolveRTV.GetAddressOf(),
+									 mDepthStencilBufferReadOnlyDSV.Get());
+
+		// set input layout
+		mContext->IASetInputLayout(nullptr);
+
+		// set vertex shader
+		mContext->VSSetShader(mFullscreenVS.Get(), nullptr, 0);
+
+		// set shader resource views
+		ID3D11ShaderResourceView* pSRVs[] =
+		{
+			mShadowsResolveSRV.Get(),
+			nullptr,
+			mDepthBufferSRV.Get(),
+			mGBufferSRV.Get(),
+			mBVH.GetTreeBufferSRV(),
+			mBVH.GetVertexBufferSRV(),
+		};
+		mContext->PSSetShaderResources(2, sizeof(pSRVs) / sizeof(pSRVs[0]), pSRVs);
+
+		// set pixel shader
+		mContext->PSSetShader(mRayTraced.GetReflectionsPS(), nullptr, 0);
+
+		// set depth stencil state
+		mContext->OMSetDepthStencilState(mRayTraced.GetReflectionsDSS(), 0);
+
+		// draw
+		mContext->Draw(3, 0);
+
+		mContext->OMSetDepthStencilState(nullptr, 0);
+
+		// set shader resource views
+		ID3D11ShaderResourceView* pNullSRVs[] =
+		{
+			nullptr,
+			nullptr,
+			nullptr,
+			nullptr,
+			nullptr,
+			nullptr,
+		};
+		mContext->PSSetShaderResources(2, sizeof(pNullSRVs) / sizeof(pNullSRVs[0]), pNullSRVs);
+
+#if IMGUI
+		GPUProfilerTimestamp(TimestampQueryType::RayTracedReflectionsEnd);
+#endif // IMGUI
+		mUserDefinedAnnotation->EndEvent();
+	}
 
 	// main pass
 	{
 		mUserDefinedAnnotation->BeginEvent(L"main pass");
+#if IMGUI
+		GPUProfilerTimestamp(TimestampQueryType::MainPassBegin);
+#endif // IMGUI
 
 		// clear back buffer
 		mContext->ClearRenderTargetView(mBackBufferRTV.Get(), DirectX::Colors::Magenta);
@@ -336,8 +430,12 @@ void AppInst::Draw(const Timer& timer)
 		// set depth stencil state
 		mContext->OMSetDepthStencilState(mDepthEqualDSS.Get(), 0);
 
-		// set shader resource views
-		mContext->PSSetShaderResources(2, 1, mShadowsResolveSRV.GetAddressOf());
+		ID3D11ShaderResourceView* pSRVs[] =
+		{
+			mShadowsResolveSRV.Get(),
+			mReflectionsResolveSRV.Get(),
+		};
+		mContext->PSSetShaderResources(2, sizeof(pSRVs) / sizeof(pSRVs[0]), pSRVs);
 
 		for (std::size_t i = 0; i < mObjectManager.GetObjects().size(); ++i)
 		{
@@ -347,108 +445,103 @@ void AppInst::Draw(const Timer& timer)
 			const Object& object = mObjectManager.GetObject(i);
 			const MeshData& mesh = mMeshManager.GetMesh(object.mesh);
 
+			if (object.pixelShader.Get())
+			{
+				mContext->PSSetShader(object.pixelShader.Get(), nullptr, 0);
+			}
+
 			// draw
 			mContext->DrawIndexed(mesh.indexCount, mesh.indexStart, mesh.vertexBase);
+
+			if (object.pixelShader.Get())
+			{
+				mContext->PSSetShader(mDefaultPS.Get(), nullptr, 0);
+			}
 		}
 
-		ID3D11ShaderResourceView* pNullSRV = nullptr;
-		mContext->PSSetShaderResources(2, 1, &pNullSRV);
+		ID3D11ShaderResourceView* pNullSRVs[] =
+		{
+			nullptr,
+			nullptr,
+		};
+		mContext->PSSetShaderResources(2, sizeof(pNullSRVs) / sizeof(pNullSRVs[0]), pNullSRVs);
 
+#if IMGUI
+		GPUProfilerTimestamp(TimestampQueryType::MainPassEnd);
+#endif // IMGUI
 		mUserDefinedAnnotation->EndEvent();
 	}
 
-	// ray traced
-	{
-		//// set back buffer 
-		//ID3D11RenderTargetView* RTVs[] =
-		//{
-		//	mBackBufferRTV.Get(),
-		//	nullptr,
-		//};
-		//mContext->OMSetRenderTargets(sizeof(RTVs) / sizeof(RTVs[0]),
-		//							 RTVs,
-		//							 mDepthStencilBufferReadOnlyDSV.Get());
+	// ================================================================================
 
-		// set input layout
-		mContext->IASetInputLayout(nullptr);
+	//// ray traced
+	//{
+	//	//// set back buffer 
+	//	//ID3D11RenderTargetView* RTVs[] =
+	//	//{
+	//	//	mBackBufferRTV.Get(),
+	//	//	nullptr,
+	//	//};
+	//	//mContext->OMSetRenderTargets(sizeof(RTVs) / sizeof(RTVs[0]),
+	//	//							 RTVs,
+	//	//							 mDepthStencilBufferReadOnlyDSV.Get());
 
-		// set vertex shader
-		mContext->VSSetShader(mFullscreenVS.Get(), nullptr, 0);
+	//	// set input layout
+	//	mContext->IASetInputLayout(nullptr);
 
-		// set shader resource views
-		ID3D11ShaderResourceView* SRVs[] =
-		{
-			mDepthBufferSRV.Get(),
-			mGBufferSRV.Get(),
-			mBVH.GetTreeBufferSRV(),
-			mBVH.GetVertexBufferSRV(),
-		};
-		mContext->PSSetShaderResources(3, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
+	//	// set vertex shader
+	//	mContext->VSSetShader(mFullscreenVS.Get(), nullptr, 0);
 
-		// set blend state
-		mContext->OMSetBlendState(mRayTraced.GetBlendState(), nullptr, 0xffffffff);
-		
-		//GPUProfilerTimestamp(TimestampQueryType::RayTracedBegin);
+	//	// set shader resource views
+	//	ID3D11ShaderResourceView* SRVs[] =
+	//	{
+	//		mDepthBufferSRV.Get(),
+	//		mGBufferSRV.Get(),
+	//		mBVH.GetTreeBufferSRV(),
+	//		mBVH.GetVertexBufferSRV(),
+	//	};
+	//	mContext->PSSetShaderResources(3, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
 
-		//// shadows
-		//{
-		//	mUserDefinedAnnotation->BeginEvent(L"raytraced shadows");
+	//	// set blend state
+	//	mContext->OMSetBlendState(mRayTraced.GetBlendState(), nullptr, 0xffffffff);
 
-		//	// set pixel shader
-		//	mContext->PSSetShader(mRayTraced.GetShadowsPS(), nullptr, 0);
+	//	// reflections
+	//	{
+	//		mUserDefinedAnnotation->BeginEvent(L"raytraced reflections");
 
-		//	// set constant buffer
-		//	ID3D11Buffer* CBs[] =
-		//	{
-		//		mRayTraced.GetShadowsCB()
-		//	};
-		//	mContext->PSSetConstantBuffers(1, sizeof(CBs) / sizeof(CBs[0]), CBs);
+	//		// set pixel shader
+	//		mContext->PSSetShader(mRayTraced.GetReflectionsPS(), nullptr, 0);
 
-		//	// draw
-		//	mContext->Draw(3, 0);
+	//		// set constant buffer
+	//		ID3D11Buffer* CBs[] =
+	//		{
+	//			mRayTraced.GetReflectionsCB()
+	//		};
+	//		mContext->PSSetConstantBuffers(1, sizeof(CBs) / sizeof(CBs[0]), CBs);
 
-		//	GPUProfilerTimestamp(TimestampQueryType::RayTracedShadows);
+	//		// set depth stencil state
+	//		mContext->OMSetDepthStencilState(mRayTraced.GetReflectionsDSS(), 0);
 
-		//	mUserDefinedAnnotation->EndEvent();
-		//}
+	//		// draw
+	//		mContext->Draw(3, 0);
 
-		// reflections
-		{
-			mUserDefinedAnnotation->BeginEvent(L"raytraced reflections");
+	//		GPUProfilerTimestamp(TimestampQueryType::RayTracedReflections);
 
-			// set pixel shader
-			mContext->PSSetShader(mRayTraced.GetReflectionsPS(), nullptr, 0);
+	//		mUserDefinedAnnotation->EndEvent();
+	//	}
 
-			// set constant buffer
-			ID3D11Buffer* CBs[] =
-			{
-				mRayTraced.GetReflectionsCB()
-			};
-			mContext->PSSetConstantBuffers(1, sizeof(CBs) / sizeof(CBs[0]), CBs);
+	//	// set shader resource views
+	//	ID3D11ShaderResourceView* NullSRVs[] =
+	//	{
+	//		nullptr,
+	//		nullptr,
+	//		nullptr,
+	//		nullptr,
+	//	};
+	//	mContext->PSSetShaderResources(3, sizeof(NullSRVs) / sizeof(NullSRVs[0]), NullSRVs);
 
-			// set depth stencil state
-			mContext->OMSetDepthStencilState(mRayTraced.GetReflectionsDSS(), 0);
+	//	mContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 
-			// draw
-			mContext->Draw(3, 0);
-
-			GPUProfilerTimestamp(TimestampQueryType::RayTracedReflections);
-
-			mUserDefinedAnnotation->EndEvent();
-		}
-
-		// set shader resource views
-		ID3D11ShaderResourceView* NullSRVs[] =
-		{
-			nullptr,
-			nullptr,
-			nullptr,
-			nullptr,
-		};
-		mContext->PSSetShaderResources(3, sizeof(NullSRVs) / sizeof(NullSRVs[0]), NullSRVs);
-
-		mContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
-
-		mContext->OMSetDepthStencilState(nullptr, 0);
-	}
+	//	mContext->OMSetDepthStencilState(nullptr, 0);
+	//}
 }

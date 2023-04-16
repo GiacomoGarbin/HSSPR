@@ -138,8 +138,8 @@ public:
 		// depth stencil state
 		{
 			D3D11_DEPTH_STENCIL_DESC desc;
-			desc.DepthEnable = TRUE;
-			desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+			desc.DepthEnable = FALSE;
+			desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
 			desc.DepthFunc = D3D11_COMPARISON_LESS;
 			desc.StencilEnable = TRUE;
 			desc.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
