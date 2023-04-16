@@ -2,33 +2,40 @@
 #include "../RenderToyD3D11/shaders/Common.hlsl"
 #include "../RenderToyD3D11/shaders/Fullscreen.hlsl"
 
-#if NORMALS
-Texture2D<float4> NormalDepthBuffer : register(t2);
-#else
 Texture2D<float> DepthBuffer : register(t2);
-#endif
+Texture2D<float4> GBuffer : register(t3);
 
-#if STRUCTURED
-StructuredBuffer<float4> BVH : register(t3);
-#else
-ByteAddressBuffer BVH : register(t3);
-#endif
-
-#if !SHADOWS
 #if STRUCTURED
 StructuredBuffer<float4>
 #else
 ByteAddressBuffer
 #endif
-VertexBuffer : register(t4);
-#endif
+BVH : register(t4);
 
 #define kEpsilon 0.00001f
+#define kSelfShadowOffset 0.005f
 
-#if !SHADOWS
+#if !SHADOWS // reflections only
+#if STRUCTURED
+StructuredBuffer<float4>
+#else
+ByteAddressBuffer
+#endif
+VertexBuffer : register(t5);
+
 // #define FLT_MAX 3.402823466e+38f
 #define FLT_MAX 1000000000
-#endif
+#define BACKFACE_CULLING 1
+
+struct HitPoint
+{
+    float3 worldPos;
+    float3 normal;
+    float2 uv;
+    float3 tangent;
+    int materialIndex;
+};
+#endif // !SHADOWS
 
 float3 GetWorldPos(const float2 uv, const float depth)
 {
@@ -75,9 +82,9 @@ bool RayTriIntersect(const float3 origin,
 	t = dot(e2, s2) * invd;
 
 	if (
-#if BACKFACE_CULLING
+#ifdef BACKFACE_CULLING
 		dot(s1, e1) < -kEpsilon ||
-#endif
+#endif // BACKFACE_CULLING
 		bc.x < 0.0 || bc.x > 1.0 || bc.y < 0.0 || (bc.x + bc.y) > 1.0 || t < 0.0 || t > 1e9)
 	{
 		return false;
@@ -90,29 +97,23 @@ bool RayTriIntersect(const float3 origin,
 
 bool RayTraced(const float3 worldPos,
 			   const float3 rayDir,
-			   const float3 rayDirInv,
-#if SHADOWS
-			   inout float t,
-			   inout float2 bc)
-#else
-			   inout int material,
-               inout float3 hitWorldPos,
-			   inout float3 normal,
-			   inout float2 uv,
-			   inout float3 tangent)
-#endif
+			   const float3 rayDirInv
+#if !SHADOWS
+			   , inout HitPoint hitPoint
+#endif // !SHADOWS
+)
 {
 	bool collision = false;
     int dataOffset = 0;
 	int offsetToNextNode = 1;
 	
+	float t = 0;
+	float2 bc = 0; // barycentric coords
+
 #if !SHADOWS
 	float minDist = FLT_MAX;
 	bool hit = false;
-
-	float t = 0;
-	float2 bc = 0; // barycentric coords
-#endif
+#endif // !SHADOWS
 
     [loop]
     while (offsetToNextNode != 0)
@@ -148,7 +149,7 @@ bool RayTraced(const float3 worldPos,
             {
                 break;
             }
-#else
+#else // SHADOWS
             if (collision && t < minDist)
             {
 				minDist = t;
@@ -182,19 +183,19 @@ bool RayTraced(const float3 worldPos,
                 const float3 t2 = e1.xyz;
                 const float2 u2 = float2(e0.w, e1.w);
 
-				material    = element2.w;
-                hitWorldPos = v0 * (1 - bc.x - bc.y) + v1 * bc.x + v2 * bc.y;
-                normal      = n0 * (1 - bc.x - bc.y) + n1 * bc.x + n2 * bc.y;
-                uv          = u0 * (1 - bc.x - bc.y) + u1 * bc.x + u2 * bc.y;
-                tangent     = t0 * (1 - bc.x - bc.y) + t1 * bc.x + t2 * bc.y;
+                hitPoint.worldPos = v0 * (1 - bc.x - bc.y) + v1 * bc.x + v2 * bc.y;
+                hitPoint.normal   = n0 * (1 - bc.x - bc.y) + n1 * bc.x + n2 * bc.y;
+                hitPoint.uv       = u0 * (1 - bc.x - bc.y) + u1 * bc.x + u2 * bc.y;
+                hitPoint.tangent  = t0 * (1 - bc.x - bc.y) + t1 * bc.x + t2 * bc.y;
+				hitPoint.materialIndex = element2.w;
             }
-#endif
+#endif // SHADOWS
         }
     }
 
 #if SHADOWS
 	return collision;
 #else
-	return hit;
+	return hit; // can we use collision also for reflections?
 #endif
 }

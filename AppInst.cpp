@@ -22,17 +22,41 @@ bool AppInst::Init()
 	MeshData mesh = MeshManager::CreateBox(1, 1, 1);
 
 	Material material;
-	material.diffuse = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+	//material.diffuse = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+	XMStoreFloat4(&material.diffuse, DirectX::Colors::Cyan);
 	material.fresnel = XMFLOAT3(0.6f, 0.6f, 0.6f);
 	material.roughness = 0.2f;
-	material.diffuseTextureIndex = 0; // mTextureManager.LoadTexture("textures/WoodCrate01.dds");
+	material.diffuseTextureIndex = -1; // mTextureManager.LoadTexture("textures/WoodCrate01.dds");
 
 	Object object;
 	object.mesh = mMeshManager.AddMesh("box", mesh);
 	object.material = mMaterialManager.AddMaterial("default", material);
 	XMStoreFloat4x4(&object.world, XMMatrixScaling(10, 1, 10) * XMMatrixTranslation(0, -1, 0));
 
+	D3D11_DEPTH_STENCIL_DESC desc;
+	desc.DepthEnable = TRUE;
+	desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+	desc.DepthFunc = D3D11_COMPARISON_LESS;
+	desc.StencilEnable = TRUE;
+	desc.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
+	desc.StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+	desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+	desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+	desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_ZERO;
+	desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+	desc.BackFace = desc.FrontFace;
+
+	ThrowIfFailed(mDevice->CreateDepthStencilState(&desc, &object.depthStencilState));
+	NameResource(object.depthStencilState.Get(), "ReflectiveSurfaceDSS");
+
 	mObjectManager.AddObject(object);
+
+	desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_INCR_SAT;
+	desc.BackFace = desc.FrontFace;
+
+	object.depthStencilState.Reset();
+	ThrowIfFailed(mDevice->CreateDepthStencilState(&desc, &object.depthStencilState));
+	NameResource(object.depthStencilState.Get(), "NonReflectiveSurfaceDSS");
 
 	XMVECTORF32 colors[] =
 	{
@@ -48,6 +72,9 @@ bool AppInst::Init()
 	};
 
 	float radius = 1;
+
+	//material.roughness = 1;
+	material.diffuseTextureIndex = 0;
 
 	for (float x = -radius; x <= +radius; ++x)
 	{
@@ -93,89 +120,178 @@ void AppInst::Update(const Timer& timer)
 
 void AppInst::Draw(const Timer& timer)
 {
-	// clear back buffer
-	mContext->ClearRenderTargetView(mBackBufferRTV.Get(),
-									DirectX::Colors::Magenta);
-
-	// clear depth stencil buffer
-	mContext->ClearDepthStencilView(mDepthStencilBufferDSV.Get(),
-									D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 
-									1.0f,
-									0);
-
-	// set back buffer and depth stencil buffer
-	mContext->OMSetRenderTargets(1,
-								 mBackBufferRTV.GetAddressOf(),
-								 mDepthStencilBufferDSV.Get());
-
-	// set viewport
-	mContext->RSSetViewports(1, &mViewport);
-
-	// set input layout
-	mContext->IASetInputLayout(mInputLayout.Get());
-
-	// set primitive topology
-	mContext->IASetPrimitiveTopology(mPrimitiveTopology);
-
-	// set vertex buffer
-	const UINT stride = sizeof(VertexData);
-	const UINT offset = 0;
-	mContext->IASetVertexBuffers(0, 1, mMeshManager.GetAddressOfVertexBuffer(), &stride, &offset);
-	
-	// set index buffer
-	mContext->IASetIndexBuffer(mMeshManager.GetIndexBuffer(), mMeshManager.GetIndexBufferFormat(), 0);
-
-	// set rasterizer state
-	// set depth stencil state
-	// set blend state
-
-	// set main pass constant buffer
-	mContext->VSSetConstantBuffers(0, 1, mMainPassCB.GetAddressOf());
-	mContext->PSSetConstantBuffers(0, 1, mMainPassCB.GetAddressOf());
-
-	// set object constant buffer
-	mContext->VSSetConstantBuffers(1, 1, mObjectManager.GetAddressOfBuffer());
-	mContext->PSSetConstantBuffers(1, 1, mObjectManager.GetAddressOfBuffer());
-
-	// set vertex shader
-	mContext->VSSetShader(mDefaultVS.Get(), nullptr, 0);
-
-	// set pixel shader
-	mContext->PSSetShader(mDefaultPS.Get(), nullptr, 0);
-
-	// set sampler states
-	ID3D11SamplerState* samplers[]
+	// globals
 	{
-		nullptr,
-		nullptr,
-		mSamplerLinearWrap.Get(),
-	};
-	mContext->PSSetSamplers(0, sizeof(samplers) / sizeof(samplers[0]), samplers);
+		// set sampler states
+		ID3D11SamplerState* samplers[]
+		{
+			nullptr,
+			nullptr,
+			mSamplerLinearWrap.Get(),
+		};
+		mContext->PSSetSamplers(0, sizeof(samplers) / sizeof(samplers[0]), samplers);
 
-	// set shader resource views
-	ID3D11ShaderResourceView* SRVs[] =
+		// set shader resource views
+		ID3D11ShaderResourceView* SRVs[] =
+		{
+			mMaterialManager.GetBufferSRV(),
+			mTextureManager.GetSRV(0),
+		};
+		mContext->PSSetShaderResources(0, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
+	}
+
+	// depth/gbuffer prepass
 	{
-		mMaterialManager.GetBufferSRV(),
-		mTextureManager.GetSRV(0),
-	};
-	mContext->PSSetShaderResources(0, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
+		mUserDefinedAnnotation->BeginEvent(L"depth/gbuffer prepass");
 
-	for (std::size_t i = 0; i < mObjectManager.GetObjects().size(); ++i)
+		// clear depth stencil buffer
+		mContext->ClearDepthStencilView(mDepthStencilBufferDSV.Get(),
+										D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
+										1.0f,
+										1); // stencil == 0 means reflective surface
+
+		// clear gbuffer
+		const FLOAT clearGBuffer[] = { 0, 0, 0, -1 };
+		mContext->ClearRenderTargetView(mGBufferRTV.Get(), clearGBuffer);
+
+		// set back buffer, gbuffer and depth stencil buffer
+		mContext->OMSetRenderTargets(1,
+									 mGBufferRTV.GetAddressOf(),
+									 mDepthStencilBufferDSV.Get());
+
+		// set viewport
+		mContext->RSSetViewports(1, &mViewport);
+
+		// set input layout
+		mContext->IASetInputLayout(mInputLayout.Get());
+
+		// set primitive topology
+		mContext->IASetPrimitiveTopology(mPrimitiveTopology);
+
+		// set vertex buffer
+		const UINT stride = sizeof(VertexData);
+		const UINT offset = 0;
+		mContext->IASetVertexBuffers(0, 1, mMeshManager.GetAddressOfVertexBuffer(), &stride, &offset);
+
+		// set index buffer
+		mContext->IASetIndexBuffer(mMeshManager.GetIndexBuffer(), mMeshManager.GetIndexBufferFormat(), 0);
+
+		// set main pass constant buffer
+		mContext->VSSetConstantBuffers(0, 1, mMainPassCB.GetAddressOf());
+		mContext->PSSetConstantBuffers(0, 1, mMainPassCB.GetAddressOf());
+
+		// set object constant buffer
+		mContext->VSSetConstantBuffers(1, 1, mObjectManager.GetAddressOfBuffer());
+		mContext->PSSetConstantBuffers(1, 1, mObjectManager.GetAddressOfBuffer());
+
+		// set vertex shader
+		mContext->VSSetShader(mDefaultVS.Get(), nullptr, 0);
+
+		// set pixel shader
+		mContext->PSSetShader(mGBufferPS.Get(), nullptr, 0);
+
+		for (std::size_t i = 0; i < mObjectManager.GetObjects().size(); ++i)
+		{
+			// update object constant buffer with object data
+			mObjectManager.UpdateBuffer(i);
+
+			const Object& object = mObjectManager.GetObject(i);
+			const MeshData& mesh = mMeshManager.GetMesh(object.mesh);
+
+			if (object.depthStencilState.Get())
+			{
+				mContext->OMSetDepthStencilState(object.depthStencilState.Get(), object.stencilRef);
+			}
+			else
+			{
+				mContext->OMSetDepthStencilState(nullptr, 0);
+			}
+
+			// draw
+			mContext->DrawIndexed(mesh.indexCount, mesh.indexStart, mesh.vertexBase);
+		}
+
+		mUserDefinedAnnotation->EndEvent();
+	}
+
+	// shadows map
+	// (shadows resolve)
+	// raytraced shadows
+	// SSPR
+	// raytraced reflections
+
+	// main pass
 	{
-		mObjectManager.UpdateBuffer(i);
+		mUserDefinedAnnotation->BeginEvent(L"main pass");
 
-		const MeshData& mesh = mMeshManager.GetMesh(mObjectManager.GetObject(i).mesh);
+		// clear back buffer
+		mContext->ClearRenderTargetView(mBackBufferRTV.Get(), DirectX::Colors::Magenta);
 
-		// draw
-		mContext->DrawIndexed(mesh.indexCount, mesh.indexStart, mesh.vertexBase);
+		// set back buffer, gbuffer and depth stencil buffer
+		mContext->OMSetRenderTargets(1,
+									 mBackBufferRTV.GetAddressOf(),
+									 mDepthStencilBufferReadOnlyDSV.Get());
+
+		// set viewport
+		mContext->RSSetViewports(1, &mViewport);
+
+		// set input layout
+		mContext->IASetInputLayout(mInputLayout.Get());
+
+		// set primitive topology
+		mContext->IASetPrimitiveTopology(mPrimitiveTopology);
+
+		// set vertex buffer
+		const UINT stride = sizeof(VertexData);
+		const UINT offset = 0;
+		mContext->IASetVertexBuffers(0, 1, mMeshManager.GetAddressOfVertexBuffer(), &stride, &offset);
+
+		// set index buffer
+		mContext->IASetIndexBuffer(mMeshManager.GetIndexBuffer(), mMeshManager.GetIndexBufferFormat(), 0);
+
+		// set main pass constant buffer
+		mContext->VSSetConstantBuffers(0, 1, mMainPassCB.GetAddressOf());
+		mContext->PSSetConstantBuffers(0, 1, mMainPassCB.GetAddressOf());
+
+		// set object constant buffer
+		mContext->VSSetConstantBuffers(1, 1, mObjectManager.GetAddressOfBuffer());
+		mContext->PSSetConstantBuffers(1, 1, mObjectManager.GetAddressOfBuffer());
+
+		// set vertex shader
+		mContext->VSSetShader(mDefaultVS.Get(), nullptr, 0);
+
+		// set pixel shader
+		mContext->PSSetShader(mDefaultPS.Get(), nullptr, 0);
+
+		// set depth stencil state
+		mContext->OMSetDepthStencilState(mDepthEqualDSS.Get(), 0);
+
+		for (std::size_t i = 0; i < mObjectManager.GetObjects().size(); ++i)
+		{
+			// update object constant buffer with object data
+			mObjectManager.UpdateBuffer(i);
+
+			const Object& object = mObjectManager.GetObject(i);
+			const MeshData& mesh = mMeshManager.GetMesh(object.mesh);
+
+			// draw
+			mContext->DrawIndexed(mesh.indexCount, mesh.indexStart, mesh.vertexBase);
+		}
+
+		mUserDefinedAnnotation->EndEvent();
 	}
 
 	// ray traced
 	{
-		// set back buffer and depth stencil buffer
-		mContext->OMSetRenderTargets(1,
-									 mBackBufferRTV.GetAddressOf(),
-									 nullptr);
+		//// set back buffer 
+		//ID3D11RenderTargetView* RTVs[] =
+		//{
+		//	mBackBufferRTV.Get(),
+		//	nullptr,
+		//};
+		//mContext->OMSetRenderTargets(sizeof(RTVs) / sizeof(RTVs[0]),
+		//							 RTVs,
+		//							 mDepthStencilBufferReadOnlyDSV.Get());
 
 		// set input layout
 		mContext->IASetInputLayout(nullptr);
@@ -187,6 +303,7 @@ void AppInst::Draw(const Timer& timer)
 		ID3D11ShaderResourceView* SRVs[] =
 		{
 			mDepthBufferSRV.Get(),
+			mGBufferSRV.Get(),
 			mBVH.GetTreeBufferSRV(),
 			mBVH.GetVertexBufferSRV(),
 		};
@@ -199,6 +316,8 @@ void AppInst::Draw(const Timer& timer)
 
 		// shadows
 		{
+			mUserDefinedAnnotation->BeginEvent(L"raytraced shadows");
+
 			// set pixel shader
 			mContext->PSSetShader(mRayTraced.GetShadowsPS(), nullptr, 0);
 
@@ -213,10 +332,14 @@ void AppInst::Draw(const Timer& timer)
 			mContext->Draw(3, 0);
 
 			GPUProfilerTimestamp(TimestampQueryType::RayTracedShadows);
+
+			mUserDefinedAnnotation->EndEvent();
 		}
 
 		// reflections
 		{
+			mUserDefinedAnnotation->BeginEvent(L"raytraced reflections");
+
 			// set pixel shader
 			mContext->PSSetShader(mRayTraced.GetReflectionsPS(), nullptr, 0);
 
@@ -227,16 +350,27 @@ void AppInst::Draw(const Timer& timer)
 			};
 			mContext->PSSetConstantBuffers(1, sizeof(CBs) / sizeof(CBs[0]), CBs);
 
+			// set depth stencil state
+			mContext->OMSetDepthStencilState(mRayTraced.GetReflectionsDSS(), 0);
+
 			// draw
 			mContext->Draw(3, 0);
 
 			GPUProfilerTimestamp(TimestampQueryType::RayTracedReflections);
+
+			mUserDefinedAnnotation->EndEvent();
 		}
 
 		// set shader resource views
-		ID3D11ShaderResourceView* pNullSRV = nullptr;
-		mContext->PSSetShaderResources(2, 1, &pNullSRV);
+		ID3D11ShaderResourceView* NullSRVs[] =
+		{
+			nullptr,
+			nullptr,
+		};
+		mContext->PSSetShaderResources(2, sizeof(NullSRVs) / sizeof(NullSRVs[0]), NullSRVs);
 
 		mContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
+
+		mContext->OMSetDepthStencilState(nullptr, 0);
 	}
 }

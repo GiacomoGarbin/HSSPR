@@ -134,6 +134,26 @@ public:
 
 			NameResource(mBlendState.Get(), "RayTracedBS");
 		}
+
+		// depth stencil state
+		{
+			D3D11_DEPTH_STENCIL_DESC desc;
+			desc.DepthEnable = TRUE;
+			desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+			desc.DepthFunc = D3D11_COMPARISON_LESS;
+			desc.StencilEnable = TRUE;
+			desc.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
+			desc.StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+			desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+			desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+			desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+			desc.FrontFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+			desc.BackFace = desc.FrontFace;
+
+			mDevice->CreateDepthStencilState(&desc, &mReflectionsDSS);
+
+			NameResource(mReflectionsDSS.Get(), "RayTracedDSS");
+		}
 	}
 
 	void UpdateCBs(const XMFLOAT4X4& viewProjInv,
@@ -187,6 +207,11 @@ public:
 		return mBlendState.Get();
 	}
 
+	ID3D11DepthStencilState* GetReflectionsDSS()
+	{
+		return mReflectionsDSS.Get();
+	}
+
 private:
 
 	ComPtr<ID3D11Device> mDevice;
@@ -198,6 +223,7 @@ private:
 	ComPtr<ID3D11Buffer> mShadowsCB;
 	ComPtr<ID3D11Buffer> mReflectionsCB;
 	ComPtr<ID3D11BlendState> mBlendState;
+	ComPtr<ID3D11DepthStencilState> mReflectionsDSS;
 
 	//struct CommonCB
 	//{
