@@ -105,7 +105,7 @@ public:
 
 		std::vector<XMFLOAT4> vertices;
 
-		for (std::size_t j = 0; j < objects.size(); ++j)
+		for (std::size_t j = 0; j < objects.size() - 1; ++j)
 		{
 			const Object& object = objects[j];
 			const MeshData& mesh = meshManager.GetMesh(object.mesh);
@@ -113,15 +113,16 @@ public:
 			const Material& material = materialManager.GetMaterial(object.material);
 			const XMMATRIX uvTransform = XMLoadFloat4x4(&object.uvTransform) * XMLoadFloat4x4(&material.uvTransform);
 
-			triangles.reserve(triangles.size() + (mesh.indexCount / 3));
+			const std::size_t indexCount = mesh.indexCount ? mesh.indexCount : mesh.vertices.size();
 
-			vertices.reserve(vertices.size() + mesh.indexCount * 2);
+			vertices.reserve(vertices.size() + indexCount * 2);
+			triangles.reserve(triangles.size() + (indexCount / 3));
 
-			for (std::size_t i = 0; i < mesh.indexCount; i += 3)
+			for (std::size_t i = 0; i < indexCount; i += 3)
 			{
-				const MeshData::IndexType i0 = mesh.indices[i + 0];
-				const MeshData::IndexType i1 = mesh.indices[i + 1];
-				const MeshData::IndexType i2 = mesh.indices[i + 2];
+				const MeshData::IndexType i0 = mesh.indexCount ? mesh.indices[i + 0] : MeshData::IndexType(i + 0);
+				const MeshData::IndexType i1 = mesh.indexCount ? mesh.indices[i + 1] : MeshData::IndexType(i + 1);
+				const MeshData::IndexType i2 = mesh.indexCount ? mesh.indices[i + 2] : MeshData::IndexType(i + 2);
 
 				// the w member of the returned XMVECTOR is initialized to 0
 				XMVECTOR v0 = XMLoadFloat3(&mesh.vertices[i0].position);
@@ -136,7 +137,7 @@ public:
 				TriangleData triangle;
 
 				triangle.offset = offset;
-				offset += 3*2;
+				offset += 3 * 2;
 
 				triangle.material = object.material;
 
@@ -506,8 +507,8 @@ private:
 				// when on the left branch, how many float4 elements we need to skip to reach the right branch?
 				leaf->v0.w = sizeof(Leaf) / sizeof(XMFLOAT4);
 
-				leaf->e1.w = treeNode->data.offset; // triangle index to fetch vertex data
-				leaf->e2.w = treeNode->data.material; // material index
+				leaf->e1.w = float(treeNode->data.offset); // triangle index to fetch vertex data
+				leaf->e2.w = float(treeNode->data.material); // material index
 
 				dataOffset += sizeof(Leaf);
 			}
@@ -573,7 +574,7 @@ private:
 	void WriteVertexBuffer(const std::vector<XMFLOAT4>& vertices)
 	{
 		D3D11_BUFFER_DESC desc;
-		desc.ByteWidth = vertices.size() * sizeof(XMFLOAT4);
+		desc.ByteWidth = UINT(vertices.size()) * sizeof(XMFLOAT4);
 		desc.Usage = D3D11_USAGE_DEFAULT;
 		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 		desc.CPUAccessFlags = 0;

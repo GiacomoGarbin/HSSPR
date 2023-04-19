@@ -69,6 +69,30 @@ public:
 
 				NameResource(mReflectionsPS.Get(), "RayTracedReflectionsPS");
 			}
+
+			// reflections fake normals
+			{
+				std::wstring path = L"shaders/RayTracedReflections.hlsl";
+
+				const D3D_SHADER_MACRO defines[] =
+				{
+					"STRUCTURED", STRUCTURED ? "1" : "0",
+					"FAKE_NORMALS", "1",
+					nullptr, nullptr
+				};
+
+				ComPtr<ID3DBlob> pCode = CompileShader(path,
+													   defines,
+													   "RayTracedReflectionsPS",
+													   ShaderTarget::PS);
+
+				ThrowIfFailed(mDevice->CreatePixelShader(pCode->GetBufferPointer(),
+														 pCode->GetBufferSize(),
+														 nullptr,
+														 &mReflectionsFakeNormalsPS));
+
+				NameResource(mReflectionsFakeNormalsPS.Get(), "RayTracedReflectionsFakeNormalsPS");
+			}
 		}
 
 		//// common constant buffer
@@ -187,6 +211,11 @@ public:
 		return mReflectionsPS.Get();
 	}
 
+	ID3D11PixelShader* GetReflectionsFakeNormalsPS()
+	{
+		return mReflectionsFakeNormalsPS.Get();
+	}
+
 	//ID3D11Buffer* GetCommonCB()
 	//{
 	//	return mCommonCB.Get();
@@ -219,6 +248,7 @@ private:
 
 	ComPtr<ID3D11PixelShader> mShadowsPS;
 	ComPtr<ID3D11PixelShader> mReflectionsPS;
+	ComPtr<ID3D11PixelShader> mReflectionsFakeNormalsPS;
 	//ComPtr<ID3D11Buffer> mCommonCB;
 	ComPtr<ID3D11Buffer> mShadowsCB;
 	ComPtr<ID3D11Buffer> mReflectionsCB;

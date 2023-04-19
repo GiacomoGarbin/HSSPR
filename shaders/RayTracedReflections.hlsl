@@ -43,6 +43,12 @@ float4 RayTracedReflectionsPS(const VertexOut pin) : SV_Target
 	pixel.uv       = hitPoint.uv;
 	pixel.tangent  = hitPoint.tangent;
 
+#if FAKE_NORMALS
+	const float3 e0 = ddx(pixel.world);
+	const float3 e1 = ddy(pixel.world);
+	pixel.normal = normalize(cross(e0, e1));
+#endif // FAKE_NORMALS
+
     const float4 result = DefaultImpl(pixel, hitPoint.materialIndex);
 
     return float4(result.rgb, result.a * 0.5f); // TODO: alpha based on roughness
