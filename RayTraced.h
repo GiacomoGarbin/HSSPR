@@ -70,14 +70,14 @@ public:
 				NameResource(mReflectionsPS.Get(), "RayTracedReflectionsPS");
 			}
 
-			// reflections fake normals
+			// reflections unpack normal
 			{
 				std::wstring path = L"shaders/RayTracedReflections.hlsl";
 
 				const D3D_SHADER_MACRO defines[] =
 				{
 					"STRUCTURED", STRUCTURED ? "1" : "0",
-					"FAKE_NORMALS", "1",
+					"UNPACK_NORMAL", "1",
 					nullptr, nullptr
 				};
 
@@ -89,9 +89,9 @@ public:
 				ThrowIfFailed(mDevice->CreatePixelShader(pCode->GetBufferPointer(),
 														 pCode->GetBufferSize(),
 														 nullptr,
-														 &mReflectionsFakeNormalsPS));
+														 &mReflectionsUnpackNormalPS));
 
-				NameResource(mReflectionsFakeNormalsPS.Get(), "RayTracedReflectionsFakeNormalsPS");
+				NameResource(mReflectionsUnpackNormalPS.Get(), "RayTracedReflectionsUnpackNormalPS");
 			}
 		}
 
@@ -211,9 +211,9 @@ public:
 		return mReflectionsPS.Get();
 	}
 
-	ID3D11PixelShader* GetReflectionsFakeNormalsPS()
+	ID3D11PixelShader* GetReflectionsUnpackNormalPS()
 	{
-		return mReflectionsFakeNormalsPS.Get();
+		return mReflectionsUnpackNormalPS.Get();
 	}
 
 	//ID3D11Buffer* GetCommonCB()
@@ -248,7 +248,7 @@ private:
 
 	ComPtr<ID3D11PixelShader> mShadowsPS;
 	ComPtr<ID3D11PixelShader> mReflectionsPS;
-	ComPtr<ID3D11PixelShader> mReflectionsFakeNormalsPS;
+	ComPtr<ID3D11PixelShader> mReflectionsUnpackNormalPS;
 	//ComPtr<ID3D11Buffer> mCommonCB;
 	ComPtr<ID3D11Buffer> mShadowsCB;
 	ComPtr<ID3D11Buffer> mReflectionsCB;

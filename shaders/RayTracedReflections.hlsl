@@ -51,5 +51,5 @@ float4 RayTracedReflectionsPS(const VertexOut pin) : SV_Target
 
     const float4 result = DefaultImpl(pixel, hitPoint.materialIndex);
 
-    return float4(result.rgb, result.a * 0.5f); // TODO: alpha based on roughness
+    return float4(result.rgb, result.a /** material.roughness*/); // TODO: alpha based on roughness
 }
