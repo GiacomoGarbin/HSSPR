@@ -1,4 +1,5 @@
-#define SHADOWS 1
+#define RAYTRACED_SHADOWS 1
+#define RAYTRACED_REFLECTIONS 0
 #include "RayTracedCommon.hlsl"
 
 cbuffer RayTracedShadowsCB : register(b1)

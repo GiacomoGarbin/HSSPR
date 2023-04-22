@@ -70,6 +70,7 @@ bool AppInst::Init()
 
 			const D3D_SHADER_MACRO defines[] =
 			{
+				"SHADOW_MAPPING", "1",
 				"UNPACK_NORMAL", "1",
 				nullptr, nullptr
 			};
@@ -114,6 +115,7 @@ bool AppInst::Init()
 
 			const D3D_SHADER_MACRO defines[] =
 			{
+				"SHADOW_MAPPING", "1",
 				"REFLECTIVE_SURFACE", "1",
 				nullptr, nullptr
 			};

@@ -1,7 +1,9 @@
-#define SHADOWS 0
+#define RAYTRACED_SHADOWS 0
+#define RAYTRACED_REFLECTIONS 1
 #include "RayTracedCommon.hlsl"
 
 #define FIXME 1
+#define SHADOW_MAPPING 0
 #include "../RenderToyD3D11/shaders/Default.hlsl"
 
 float4 RayTracedReflectionsPS(const VertexOut pin) : SV_Target
@@ -43,11 +45,11 @@ float4 RayTracedReflectionsPS(const VertexOut pin) : SV_Target
 	pixel.uv       = hitPoint.uv;
 	pixel.tangent  = hitPoint.tangent;
 
-#if FAKE_NORMALS
+#if FAKE_NORMAL
 	const float3 e0 = ddx(pixel.world);
 	const float3 e1 = ddy(pixel.world);
 	pixel.normal = normalize(cross(e0, e1));
-#endif // FAKE_NORMALS
+#endif // FAKE_NORMAL
 
     const float4 result = DefaultImpl(pixel, hitPoint.materialIndex);
 

@@ -12,7 +12,7 @@ ByteAddressBuffer
 #endif
 BVH : register(t7);
 
-#if !SHADOWS // reflections only
+#if RAYTRACED_REFLECTIONS
 #if STRUCTURED
 StructuredBuffer<float4>
 #else
@@ -32,7 +32,7 @@ struct HitPoint
     float3 tangent;
     int materialIndex;
 };
-#endif // !SHADOWS
+#endif // RAYTRACED_REFLECTIONS
 
 #define kEpsilon 0.00001f
 #define kSelfShadowOffset 0.005f
@@ -98,9 +98,9 @@ bool RayTriIntersect(const float3 origin,
 bool RayTraced(const float3 worldPos,
 			   const float3 rayDir,
 			   const float3 rayDirInv
-#if !SHADOWS
+#if RAYTRACED_REFLECTIONS
 			   , inout HitPoint hitPoint
-#endif // !SHADOWS
+#endif // RAYTRACED_REFLECTIONS
 )
 {
 	bool collision = false;
@@ -110,10 +110,10 @@ bool RayTraced(const float3 worldPos,
 	float t = 0;
 	float2 bc = 0; // barycentric coords
 
-#if !SHADOWS
+#if RAYTRACED_REFLECTIONS
 	float minDist = FLT_MAX;
 	bool hit = false;
-#endif // !SHADOWS
+#endif // RAYTRACED_REFLECTIONS
 
     [loop]
     while (offsetToNextNode != 0)
@@ -144,12 +144,12 @@ bool RayTraced(const float3 worldPos,
             // check for intersection with leaf triangle
             collision = RayTriIntersect(worldPos, rayDir, element0.xyz, element1.xyz, element2.xyz, t, bc);
 
-#if SHADOWS
+#if RAYTRACED_SHADOWS
             if (collision)
             {
                 break;
             }
-#else // SHADOWS
+#elif RAYTRACED_REFLECTIONS
             if (collision && t < minDist)
             {
 				minDist = t;
@@ -189,13 +189,13 @@ bool RayTraced(const float3 worldPos,
                 hitPoint.tangent  = t0 * (1 - bc.x - bc.y) + t1 * bc.x + t2 * bc.y;
 				hitPoint.materialIndex = element2.w;
             }
-#endif // SHADOWS
+#endif // RAYTRACED_SHADOWS + RAYTRACED_REFLECTIONS
         }
     }
 
-#if SHADOWS
+#if RAYTRACED_SHADOWS
 	return collision;
-#else
-	return hit; // can we use collision also for reflections?
-#endif
+#elif RAYTRACED_REFLECTIONS
+	return hit; // TODO: can we use collision also for reflections?
+#endif // RAYTRACED_SHADOWS + RAYTRACED_REFLECTIONS
 }
