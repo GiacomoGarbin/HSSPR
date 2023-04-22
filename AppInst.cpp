@@ -101,13 +101,38 @@ bool AppInst::Init()
 		XMStoreFloat4x4(&object.world, XMMatrixTranslation(1, -3, 1));
 
 		Material material;
-		XMStoreFloat4(&material.diffuse, DirectX::Colors::SlateGray);
+		XMStoreFloat4(&material.diffuse, DirectX::Colors::DarkSlateGray);
 		//material.fresnel = XMFLOAT3(0.98f, 0.97f, 0.95f);
 		material.fresnel = XMFLOAT3(0.5f, 0.5f, 0.5f);
 		material.roughness = 0.1f;
 		object.material = mMaterialManager.AddMaterial("grid", material);
 		
 		object.depthStencilState = pReflectiveSurfaceDSS;
+
+		// default reflective surface vertex shader
+		{
+			std::wstring path = L"../RenderToyD3D11/shaders/Default.hlsl";
+
+			const D3D_SHADER_MACRO defines[] =
+			{
+				//"SHADOW_MAPPING", "1",
+				//"REFLECTIVE_SURFACE", "1",
+				"WATER_NORMAL_MAPPING", "1",
+				nullptr, nullptr
+			};
+
+			ComPtr<ID3DBlob> pCode = CompileShader(path,
+												   defines,
+												   "DefaultVS",
+												   ShaderTarget::VS);
+
+			ThrowIfFailed(mDevice->CreateVertexShader(pCode->GetBufferPointer(),
+													  pCode->GetBufferSize(),
+													  nullptr,
+													  &object.vertexShader));
+
+			NameResource(object.vertexShader.Get(), "DefaultReflectiveSurfaceVS");
+		}
 
 		// default reflective surface pixel shader
 		{
@@ -117,6 +142,7 @@ bool AppInst::Init()
 			{
 				"SHADOW_MAPPING", "1",
 				"REFLECTIVE_SURFACE", "1",
+				"WATER_NORMAL_MAPPING", "1",
 				nullptr, nullptr
 			};
 
@@ -136,18 +162,39 @@ bool AppInst::Init()
 		mObjectManager.AddObject(object);
 	}
 
-	const std::vector<std::string> paths =
-	{
-		"textures/WoodCrate01.dds",
-		"textures/WoodCrate02.dds",
-	};
+	//const std::vector<std::string> paths =
+	//{
+	//	"textures/WoodCrate01.dds",
+	//	"textures/WoodCrate02.dds",
+	//};
 
-	mTextureManager.LoadTexturesIntoTexture2DArray("DiffuseTextureArray", paths);
+	//mTextureManager.LoadTexturesIntoTexture2DArray("DiffuseTextureArray", paths);
 
 	mBVH.Init(mDevice, mContext);
 	mBVH.BuildBVH(mObjectManager.GetObjects(), mMeshManager, mMaterialManager);
 
 	mRayTraced.Init(mDevice, mContext);
+
+	mWavesNormalMapOffset0 = XMFLOAT2(0, 0);
+	mWavesNormalMapOffset1 = XMFLOAT2(0, 0);
+
+	// waves constant buffer
+	{
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = sizeof(WavesCB);
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
+
+		ThrowIfFailed(mDevice->CreateBuffer(&desc, nullptr, &mWavesCB));
+
+		NameResource(mWavesCB.Get(), "WavesCB");
+	}
+
+	mTextureManager.LoadTexture("textures/waves0.dds");
+	mTextureManager.LoadTexture("textures/waves1.dds");
 
 	return true;
 }
@@ -159,6 +206,35 @@ void AppInst::Update(const Timer& timer)
 	mRayTraced.UpdateCBs(mCamera.GetViewProjInvF(),
 						 mLighting.GetLightDirection(0),
 						 mCamera.GetPositionF());
+
+	// update waves constant buffer
+	{
+		WavesCB buffer;
+
+		const float dt = timer.GetDeltaTime();
+
+		// normal map 0
+		{
+			mWavesNormalMapOffset0.x += 0.05f * dt;
+			mWavesNormalMapOffset0.y += 0.20f * dt;
+
+			XMMATRIX S = XMMatrixScaling(22.0f, 22.0f, 1.0f);
+			XMMATRIX T = XMMatrixTranslation(mWavesNormalMapOffset0.x, mWavesNormalMapOffset0.y, 0.0f);
+			XMStoreFloat4x4(&buffer.wavesNormalMapTransform0, S * T);
+		}
+
+		// normal map 1
+		{
+			mWavesNormalMapOffset1.x -= 0.02f * dt;
+			mWavesNormalMapOffset1.y += 0.05f * dt;
+
+			XMMATRIX S = XMMatrixScaling(16.0f, 16.0f, 1.0f);
+			XMMATRIX T = XMMatrixTranslation(mWavesNormalMapOffset1.x, mWavesNormalMapOffset1.y, 0.0f);
+			XMStoreFloat4x4(&buffer.wavesNormalMapTransform1, S * T);
+		}
+
+		mContext->UpdateSubresource(mWavesCB.Get(), 0, nullptr, &buffer, 0, 0);
+	}
 }
 
 void AppInst::Draw(const Timer& timer)
@@ -187,12 +263,23 @@ void AppInst::Draw(const Timer& timer)
 			mMaterialManager.GetBufferSRV(),
 			mTextureManager.GetSRV(0), // diffuse
 			mTextureManager.GetSRV(1), // normal
+			nullptr,
+			nullptr,
+			nullptr,
+			nullptr,
+			nullptr,
+			nullptr,
+			mTextureManager.GetSRV(2), // waves normal 0
+			mTextureManager.GetSRV(3), // waves normal 1
 		};
 		mContext->PSSetShaderResources(0, sizeof(SRVs) / sizeof(SRVs[0]), SRVs);
 
 		// set main pass constant buffer
 		mContext->VSSetConstantBuffers(0, 1, mMainPassCB.GetAddressOf());
 		mContext->PSSetConstantBuffers(0, 1, mMainPassCB.GetAddressOf());
+
+		// set waves constant buffer
+		mContext->VSSetConstantBuffers(2, 1, mWavesCB.GetAddressOf());
 	}
 
 	// depth/gbuffer prepass
@@ -469,6 +556,11 @@ void AppInst::Draw(const Timer& timer)
 			const Object& object = mObjectManager.GetObject(i);
 			const MeshData& mesh = mMeshManager.GetMesh(object.mesh);
 
+			if (object.vertexShader.Get())
+			{
+				mContext->VSSetShader(object.vertexShader.Get(), nullptr, 0);
+			}
+
 			if (object.pixelShader.Get())
 			{
 				mContext->PSSetShader(object.pixelShader.Get(), nullptr, 0);
@@ -482,6 +574,11 @@ void AppInst::Draw(const Timer& timer)
 			else
 			{
 				mContext->DrawIndexed(mesh.indexCount, mesh.indexStart, mesh.vertexBase);
+			}
+
+			if (object.vertexShader.Get())
+			{
+				mContext->VSSetShader(mDefaultVS.Get(), nullptr, 0);
 			}
 
 			if (object.pixelShader.Get())
